@@ -527,7 +527,10 @@ describe('the editor and the way back', () => {
         for (const tab of CONFIG.tabs) for (const f of tab.fields) expect(['swatch', 'text', 'number', 'name']).toContain(f.kind);
         // The jersey's number, the name over it (2026-10-28) and their color
         // follow the shirt's style (2026-10-26), shown only on the jersey.
-        expect(fields('clothes')).toEqual(['shirt', 'sleeves', 'jerseyNumber', 'jerseyName', 'numberColor', 'bottom', 'bottomColor', 'shoes', 'shoeColor']);
+        expect(fields('clothes')).toEqual(['shirt', 'sleeves', 'tieColor', 'jerseyNumber', 'jerseyName', 'numberColor', 'bottom', 'bottomColor', 'shoes', 'shoeColor']);
+        // The tie's color, shown only with the suit (Steve, 2026-11-03).
+        expect(clothes.fields.find((f) => f.key === 'tieColor').showWhen).toEqual({ field: 'sleeves', value: 'suit' });
+        expect(clothes.fields.find((f) => f.key === 'tieColor').kind).toBe('swatch');
         for (const key of ['jerseyNumber', 'jerseyName', 'numberColor']) expect(clothes.fields.find((f) => f.key === key).showWhen).toEqual({ field: 'sleeves', value: 'jersey' });
         expect(clothes.fields.find((f) => f.key === 'jerseyNumber').kind).toBe('number');
         expect(clothes.fields.find((f) => f.key === 'jerseyName').kind).toBe('name');
@@ -591,9 +594,15 @@ describe('the editor and the way back', () => {
         expect(groupOf(box).tagName).toBe('FIELDSET');
         expect(groupOf(box).hidden).toBe(true);
         expect(groupOf(ed.customs.numberColor).hidden).toBe(true);
+        expect(groupOf(ed.customs.tieColor).hidden).toBe(true);
         ed.set({ sleeves: 'jersey', jerseyNumber: 'none' });
         expect(groupOf(box).hidden).toBe(false);
         expect(groupOf(ed.customs.numberColor).hidden).toBe(false);
+        expect(groupOf(ed.customs.tieColor).hidden).toBe(true);
+        ed.set({ sleeves: 'suit' });
+        expect(groupOf(ed.customs.tieColor).hidden).toBe(false);
+        expect(groupOf(box).hidden).toBe(true);
+        ed.set({ sleeves: 'jersey', jerseyNumber: 'none' });
         // Typed: each keystroke dresses the figure; letters never reach it.
         box.value = '8';
         fire(box, 'input');
@@ -739,7 +748,7 @@ describe('the editor and the way back', () => {
         const changes = [];
         const ed = E.createEditor({ tablist, panels, tabs: CONFIG.tabs, avatar: { hair: 'blond', facial: 'none', hat: 'none' }, onChange: (k, id) => changes.push([k, id]) });
         // One for each color field the page shows, and none for the rest.
-        expect(Object.keys(ed.customs).sort()).toEqual(['armwearColor', 'bottomColor', 'eyes', 'facialColor', 'frameColor', 'hair', 'hatColor', 'legwearColor', 'lensColor', 'lips', 'numberColor', 'shirt', 'shoeColor', 'skin']);
+        expect(Object.keys(ed.customs).sort()).toEqual(['armwearColor', 'bottomColor', 'eyes', 'facialColor', 'frameColor', 'hair', 'hatColor', 'legwearColor', 'lensColor', 'lips', 'numberColor', 'shirt', 'shoeColor', 'skin', 'tieColor']);
         const hair = ed.customs.hair;
         expect(hair.type).toBe('color');
         expect(hair.getAttribute('aria-label')).toBe('Custom color');

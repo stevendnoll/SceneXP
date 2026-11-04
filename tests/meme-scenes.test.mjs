@@ -3,11 +3,12 @@
  * The props and staging of the four templates of 2026-11-03, on the real
  * three, through each cell's own camera at the real pictures' shapes:
  * Two Buttons' plates and buttons stay in frame at both sizes and short of the
- * side wall's shadow, its hand wears the visitor's skin and sleeve; The Medal
- * hangs on the one being honored, on any build, and stays there when that figure
- * is built again, both in a shirt front and tie; Not That Simple's hand is on one
- * side and the torch on the other, its cloak on any figure; and The Side Glance's
- * panels differ by the eyes and nothing else.
+ * side wall's shadow, its hand reaches up from below in the visitor's skin and
+ * sleeve; The Medal hangs on the one being honored, on any build, its ribbon round
+ * the neck, and stays there when that figure is built again; Not That Simple's
+ * hand is on one side and the torch on the other, no taller than the head, its
+ * cloak on any figure; and The Side Glance's panels differ by the eyes and nothing
+ * else.
  */
 import { jest } from '@jest/globals';
 import { loadRealThree } from './helpers/real-three.mjs';
@@ -79,7 +80,7 @@ function panelSizes(template) {
 }
 
 describe('Two Buttons', () => {
-    test('both plates and both buttons are in frame at both picture sizes, side by side, each plate under its button', () => {
+    test('both plates and both buttons are in frame at both picture sizes, side by side, each plate over its button', () => {
         const template = T.templateOf('twoButtons');
         for (const { i, w, h } of panelSizes(template).filter((s) => s.i === 0)) {
             const { panel, camera } = shot('twoButtons', 0, w, h);
@@ -100,8 +101,8 @@ describe('Two Buttons', () => {
                 const middle = panel.box.localToWorld(collar.position.clone());
                 const m = P.projectPoint(middle.toArray(), camera, w, h);
                 const edge = P.projectPoint([middle.x, middle.y + BUTTONS.button.collar.r, middle.z], camera, w, h);
-                expect(edge.y).toBeGreaterThan(0);
-                expect(m.y + (m.y - edge.y)).toBeLessThanOrEqual(left.y + 1);
+                expect(m.y + (m.y - edge.y)).toBeLessThan(h);
+                expect(edge.y).toBeGreaterThanOrEqual(left.y + left.h - 1);
                 expect(Math.min(Math.abs(m.x - (left.x + left.w / 2)), Math.abs(m.x - (right.x + right.w / 2)))).toBeLessThan(w * 0.03);
             }
             panel.dispose();
@@ -119,17 +120,34 @@ describe('Two Buttons', () => {
         expect(halfWide).toBeLessThan(B.width / 2 - B.depth * azimuth);
     });
 
-    test('a finger comes down between the buttons in front of the wall, no wider than the gap, and the panel holds no figure', () => {
-        const { panel } = shot('twoButtons', 0, 2, 1);
+    test('a finger reaches up from below between the buttons, in front of the wall, no wider than the gap, and the panel holds no figure', () => {
+        const { panel, camera } = shot('twoButtons', 0, 2, 1);
         const hand = panel.box.getObjectByName('hand');
-        expect(hand.position.x).toBe(0);
+        const sleeve = panel.box.getObjectByName('sleeve');
         expect(hand.geometry.attributes.position.count).toBeGreaterThan(0);
-        hand.geometry.computeBoundingBox();
-        const tip = hand.position.y + hand.geometry.boundingBox.min.y;
-        expect(tip).toBeLessThan(BUTTONS.button.y);
-        expect(tip).toBeGreaterThan(BUTTONS.plate.y + BUTTONS.plate.h / 2);
-        const half = Math.max(Math.abs(hand.geometry.boundingBox.min.x), Math.abs(hand.geometry.boundingBox.max.x));
-        expect(half).toBeLessThan(BUTTONS.x - BUTTONS.button.collar.r);
+        panel.box.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(hand, true);
+        // The fingers point up and the wrist is under them (Steve's QA,
+        // 2026-11-03: from below, not from above): a hand's fingers run along its
+        // own -y.
+        const fingers = new THREE.Vector3(0, -1, 0).applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()));
+        expect(fingers.y).toBeGreaterThan(0.7);
+        // The fingertip is the top of the hand, over the buttons' middles and
+        // under the plates.
+        expect(box.max.y).toBeGreaterThan(BUTTONS.button.y);
+        expect(box.max.y).toBeLessThan(BUTTONS.plate.y - BUTTONS.plate.h / 2);
+        const gap = BUTTONS.x - BUTTONS.button.collar.r;
+        expect(box.min.x).toBeGreaterThan(-gap);
+        expect(box.max.x).toBeLessThan(gap);
+        // The tip in the picture is the index, near the panel's middle.
+        const tip = P.projectPoint([(box.min.x + box.max.x) / 2, box.max.y, box.max.z], camera, 2000, 1000);
+        expect(Math.abs(tip.x - 1000)).toBeLessThan(200);
+        // The arm runs down from the wrist to the floor, coming toward the
+        // camera as it goes, so its end is under the floor and not in the air.
+        const length = sleeve.geometry.parameters.height;
+        const end = sleeve.localToWorld(new THREE.Vector3(0, -length / 2, 0));
+        expect(Math.abs(end.y)).toBeLessThan(0.15);
+        expect(end.z).toBeGreaterThan(hand.getWorldPosition(new THREE.Vector3()).z + 0.2);
         // A panel with no figure offers no face and makes nobody's label.
         expect(panel.figures).toEqual([]);
         panel.dispose();
@@ -196,51 +214,101 @@ describe('The Medal', () => {
         expect(has(0)).toBe(true);
         panel.replaceFigure(1, { expression: 'crying' });
         expect(has(1)).toBe(false);
-        // The shirt front is on both, built again or not.
-        expect([has(0, 'shirtFront'), has(1, 'shirtFront')]).toEqual([true, true]);
         panel.dispose();
     });
 
-    test('its disc stands clear of the chest on every build, at chest height, with the ribbon round the neck', () => {
+    test('its disc stands clear of the chest on every build, on the chest and not out in the air before it', () => {
         const fronts = {};
         for (const build of ['straight', 'slim', 'curvy', 'pear', 'broad', 'round', 'full']) {
             const { panel } = shot('medal', 0, 1, 1, { build });
             const figure = panel.figures[0];
-            const medal = figure.person.getObjectByName('medal');
-            const disc = medal.getObjectByName('disc');
+            const disc = figure.person.getObjectByName('medal').getObjectByName('disc');
             fronts[build] = bareChest({ build, ...T.templateOf('medal').cells[0].figures[0].overrides });
             expect(`${build} ${disc.position.z - fronts[build] > 0}`).toBe(`${build} true`);
-            // Standing on the chest, not out in the air before it.
             expect(`${build} ${disc.position.z - fronts[build] < 0.03}`).toBe(`${build} true`);
             expect(disc.position.y).toBe(MEDAL.disc.y);
-            const head = figure.person.getObjectByName('head');
-            const loop = medal.getObjectByName('loop');
-            expect(loop.position.y).toBeLessThan(head.position.y);
-            expect(medal.children.filter((o) => o.name === 'strap')).toHaveLength(2);
             panel.dispose();
         }
         // Measured on the build: a round middle stands deeper than a slim one.
         expect(fronts.round).toBeGreaterThan(fronts.slim + 0.02);
     });
 
-    test('over any clothes: a dark suit, no hat, and the shirt front and ribbon in front of the chest, the disc in front of them', () => {
-        const { panel } = shot('medal', 0, 1, 1, { sleeves: 'jersey', shirt: 'teal', hat: 'cap', bottom: 'shorts' });
-        const [receiver, giver] = panel.figures;
-        for (const f of [receiver, giver]) {
-            expect(f.avatar.hat).toBe('none');
-            expect(f.avatar.sleeves).toBe('long');
-            expect(f.avatar.bottom).toBe('pants');
+    test('the ribbon goes round the neck: a band behind it, open at the throat, and two straps from its ends down to the disc (Steve\'s QA, 2026-11-03)', () => {
+        const { panel } = shot('medal', 0, 1, 1);
+        const figure = panel.figures[0];
+        const medal = figure.person.getObjectByName('medal');
+        const band = medal.getObjectByName('band');
+        const B = MEDAL.ribbon.band;
+        const pos = band.geometry.attributes.position;
+        let behind = 0;
+        for (let i = 0; i < pos.count; i++) {
+            const [x, z] = [pos.getX(i), pos.getZ(i)];
+            // Nothing across the throat: every point well round from the front.
+            expect(Math.abs(Math.atan2(x, z))).toBeGreaterThan(0.6);
+            // Outside the neck, whose radius is 0.05.
+            expect(Math.hypot(x, z)).toBeGreaterThan(0.05);
+            if (z < -0.04) behind++;
         }
-        const shirt = receiver.person.getObjectByName('shirtFront');
-        const white = shirt.getObjectByName('shirt').position.z;
-        const tie = shirt.getObjectByName('tie').position.z;
-        const disc = receiver.person.getObjectByName('disc').position.z;
-        expect(tie).toBeGreaterThan(white);
-        expect(disc).toBeGreaterThan(tie);
+        expect(behind).toBeGreaterThan(0);
+        // At the neck: above the shoulders' top, under the chin.
+        const head = figure.head();
+        expect(band.position.y).toBeGreaterThan(1.3);
+        expect(band.position.y).toBeLessThan(head.y - 0.12);
+        // Two straps a side, the first from the band's end and the last ending
+        // at the disc, with no gap along the way.
+        const straps = medal.children.filter((o) => o.name === 'strap');
+        expect(straps).toHaveLength(4);
+        const ends = (piece) => {
+            const half = piece.geometry.parameters.height / 2;
+            const dir = new THREE.Vector3(0, 1, 0).applyQuaternion(piece.quaternion);
+            return [piece.position.clone().addScaledVector(dir, half), piece.position.clone().addScaledVector(dir, -half)];
+        };
+        const disc = medal.getObjectByName('disc').position;
+        for (const k of [0, 2]) {
+            const [upperTop, upperBottom] = ends(straps[k]);
+            const [lowerTop, lowerBottom] = ends(straps[k + 1]);
+            expect(upperTop.y).toBeCloseTo(B.y, 1);
+            expect(upperBottom.distanceTo(lowerTop)).toBeLessThan(0.03);
+            expect(lowerBottom.distanceTo(disc)).toBeLessThan(MEDAL.disc.r + 0.02);
+        }
         panel.dispose();
     });
 
-    test('both of the giver\'s hands are fists, for the ribbon, and both faces are the visitor\'s', () => {
+    test('over any clothes: the shared suit, no hat, the disc in front of the tie', () => {
+        const { panel } = shot('medal', 0, 1, 1, { sleeves: 'jersey', shirt: 'teal', hat: 'cap', bottom: 'shorts', tieColor: 'pink' });
+        const [receiver, giver] = panel.figures;
+        for (const f of [receiver, giver]) {
+            expect(f.avatar.hat).toBe('none');
+            expect(f.avatar.sleeves).toBe('suit');
+            expect(f.avatar.bottom).toBe('pants');
+            expect(f.avatar.tieColor).toBe('darkRed');
+            expect(f.person.getObjectByName('shirtFront')).toBeTruthy();
+        }
+        const tie = receiver.person.getObjectByName('tie').position.z;
+        expect(receiver.person.getObjectByName('disc').position.z).toBeGreaterThan(tie);
+        panel.dispose();
+    });
+
+    test('the camera sees both faces apart, both looking to its left, the receiver in front, at both picture sizes', () => {
+        for (const { w, h } of CONFIG.export.pictures) {
+            const { panel, camera } = shot('medal', 0, w, h);
+            const [receiver, giver] = panel.figures;
+            const on = (v) => P.projectPoint(v.toArray(), camera, w, h);
+            const heads = [receiver, giver].map((f) => on(f.head()));
+            const radius = Math.abs(on(receiver.head().add(new THREE.Vector3(0, 0.12, 0))).y - heads[0].y);
+            expect(heads[1].x - heads[0].x).toBeGreaterThan(radius * 2);
+            for (const f of [receiver, giver]) {
+                const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(f.group.getWorldQuaternion(new THREE.Quaternion()));
+                expect(forward.x).toBeLessThan(-0.4);
+                expect(forward.z).toBeGreaterThan(0.4);
+                expect(on(f.head()).x).toBeGreaterThan(0);
+                expect(on(f.head()).x).toBeLessThan(w);
+            }
+            panel.dispose();
+        }
+    });
+
+    test('both of the giver\'s hands are open at the action size, for the ribbon, and the receiver\'s rest', () => {
         const { panel } = shot('medal', 0, 1, 1);
         const handOf = (figure, side) => {
             let hand = null;
@@ -248,7 +316,7 @@ describe('The Medal', () => {
             return hand;
         };
         const [receiver, giver] = panel.figures;
-        expect(['right', 'left'].map((s) => handOf(giver, s).userData.shape)).toEqual(['fist', 'fist']);
+        expect(['right', 'left'].map((s) => handOf(giver, s).userData.shape)).toEqual(['open', 'open']);
         expect(['right', 'left'].map((s) => handOf(receiver, s).userData.shape)).toEqual([undefined, undefined]);
         panel.dispose();
     });
@@ -297,17 +365,23 @@ describe('Not That Simple', () => {
         figure.arms.right.traverse((o) => { if (!hand && o.userData.isHand) hand = o; });
         expect(hand.userData.shape).toBe('ring');
         const onScreen = (world) => P.projectPoint(world.toArray(), camera, 1000, 1000);
-        const h = onScreen(hand.getWorldPosition(new THREE.Vector3()));
+        const h3 = () => hand.getWorldPosition(new THREE.Vector3());
+        const h = onScreen(h3());
         const face = onScreen(figure.head());
         const torch = onScreen(panel.box.getObjectByName('cup').getWorldPosition(new THREE.Vector3()));
         expect(h.x).toBeGreaterThan(100);
         expect(h.x).toBeLessThan(face.x - 150);
         expect(torch.x).toBeGreaterThan(face.x + 150);
         expect(torch.x).toBeLessThan(1000);
-        // Up in the frame with the face, and large: the hand's own height a
-        // good share of the panel's, as the ring is the point of the picture.
-        expect(Math.abs(h.y - face.y)).toBeLessThan(150);
-        expect(h.y).toBeGreaterThan(150);
+        // Up in the frame with the face, and no taller than the head in the
+        // picture, however close to the camera it stands (Steve's QA, 2026-11-03:
+        // "way too big"), though still a good share of it.
+        expect(Math.abs(h.y - face.y)).toBeLessThan(200);
+        const bounds = new THREE.Box3().setFromObject(hand, true);
+        const handPixels = Math.abs(onScreen(new THREE.Vector3(h3().x, bounds.max.y, h3().z)).y - onScreen(new THREE.Vector3(h3().x, bounds.min.y, h3().z)).y);
+        const headPixels = Math.abs(onScreen(figure.head().add(new THREE.Vector3(0, 0.12, 0))).y - onScreen(figure.head().add(new THREE.Vector3(0, -0.12, 0))).y);
+        expect(handPixels).toBeLessThan(headPixels * 0.95);
+        expect(handPixels).toBeGreaterThan(headPixels * 0.5);
         panel.dispose();
     });
 

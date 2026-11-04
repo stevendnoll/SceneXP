@@ -345,9 +345,10 @@ function capsuleHand(unit, draw) {
  * wrist, +y), the thumb from its `base` through `thumbAt`, their tips
  * overlapping. `indexR` and `thumbR` are their thickness; the others stand on
  * the palm at `across` (toward the thumb's side), `long` times the rig's length
- * (a hand this large read as all palm), fanned `fan` radians each and bent `curl`
- * toward the palm; `scale` is the whole hand against the pointing hand's size,
- * since the ring is the point of the picture.
+ * (with a shorter finger the hand read as all palm), fanned `fan` radians each
+ * and bent `curl` toward the palm. `scale` is the whole hand against the action
+ * hands' one size (Steve's QA, 2026-11-03: at that size, up beside the face and
+ * nearer the camera, it stood as tall as the head).
  */
 export const RING = Object.freeze({
     center: Object.freeze([1.05, -0.45]),
@@ -357,7 +358,7 @@ export const RING = Object.freeze({
     base: Object.freeze([0.55, 0.3]),
     thumbAt: Object.freeze([115, 70, 35]),
     indexR: 0.19, thumbR: 0.23,
-    across: Object.freeze([0.16, -0.16, -0.48]), fan: 0.13, curl: 0.3, long: 1.4, scale: 1.35
+    across: Object.freeze([0.16, -0.16, -0.48]), fan: 0.13, curl: 0.3, long: 1.4, scale: 0.78
 });
 
 export function ringGeometry(unit, inner) {
@@ -460,14 +461,7 @@ export function fistWith(figure, side) {
 /** The hand on `side` of `figure` made the finger-and-thumb ring. Returns the
  *  hand mesh, or null when there is none. */
 export function ringWith(figure, side) {
-    return swapHand(figure, side, 'ring', (unit, inner) => {
-        const geometry = ringGeometry(unit * RING.scale, inner);
-        // Moved along the fingers by what the larger size added to the palm's
-        // top, so the wrist sits as far inside the sleeve as a plain hand's
-        // does, not cut up into the palm.
-        geometry.translate(0, -(RING.scale - 1) * unit * HAND.palmTop, 0);
-        return geometry;
-    });
+    return swapHand(figure, side, 'ring', (unit, inner) => ringGeometry(unit * RING.scale, inner));
 }
 
 /** The hand on `side` of `figure` the rig's own open hand, drawn at the

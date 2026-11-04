@@ -78,7 +78,7 @@ describe('the lists', () => {
         expect(FIELD_KEYS).toEqual(['skin', 'eyes', 'hair', 'length', 'facial', 'glasses', 'build', 'shirt',
             'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles',
             'facialColor', 'brows', 'eyeShape', 'nose', 'faceShape', 'cheeks', 'frameColor', 'lensColor', 'handSize', 'footSize',
-            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor', 'handedness', 'jerseyName']);
+            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor', 'handedness', 'jerseyName', 'tieColor']);
         for (const [key, list] of A.FIELDS) {
             const ids = list.map((o) => o.id);
             expect(`${key}: ${new Set(ids).size}`).toBe(`${key}: ${ids.length}`);
@@ -138,7 +138,7 @@ describe('the lists', () => {
         expect(A.MUSCLES.map((o) => o.label)).toEqual(['Standard', 'Athletic', 'Buff']);
         // The first three of each are the ones links made before hold; the
         // wardrobe's follow (2026-10-25).
-        expect(A.SLEEVES.map((o) => o.id)).toEqual(['long', 'short', 'tank', 'sweater', 'turtleneck', 'jersey', 'buttonDown', 'hoodie', 'vneck', 'leotard', 'bodysuit']);
+        expect(A.SLEEVES.map((o) => o.id)).toEqual(['long', 'short', 'tank', 'sweater', 'turtleneck', 'jersey', 'buttonDown', 'suit', 'hoodie', 'vneck', 'leotard', 'bodysuit']);
         expect(A.BOTTOMS.map((o) => o.id)).toEqual(['pants', 'skirt', 'shorts', 'cargoPants', 'cargoShorts', 'sweatpants', 'leggings', 'basketballShorts', 'longSkirt',
             'shortShorts', 'miniSkirt', 'pleatedSkirt', 'tutu', 'capris', 'bare']);
         for (const o of A.BOTTOMS) expect(['pants', 'shorts', 'skirt', 'capris', 'bare']).toContain(o.kind);
@@ -195,7 +195,7 @@ describe('normalizeAvatar takes anything', () => {
             mouth: 'smile', lips: 'natural', muscles: 'standard',
             facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
             frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
-            handedness: 'right', jerseyName: 'none'
+            handedness: 'right', jerseyName: 'none', tieColor: 'darkRed'
         });
         // No free text survives, whatever it was called: the one typed field
         // (the jersey's name, 2026-10-28) keeps only a name it can be.
@@ -624,7 +624,7 @@ describe('the link', () => {
     test('the default\'s link is pinned, so the field order can never move under a link already sent', () => {
         expect(A.encodeLink(A.DEFAULT_AVATAR))
             .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard'
-                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black.right.none');
+                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black.right.none.darkRed');
         // A link made before the mouth and the muscles (2026-10-23) still
         // opens, its new fields at their defaults.
         expect(A.decodeLink('#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard'))
@@ -633,7 +633,7 @@ describe('the link', () => {
                 hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard',
                 facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
                 frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
-                handedness: 'right', jerseyName: 'none' });
+                handedness: 'right', jerseyName: 'none', tieColor: 'darkRed' });
         expect(A.linkUrl(A.DEFAULT_AVATAR, 'https://www.scenexp.com/'))
             .toBe(`https://www.scenexp.com/avatar/#${A.encodeLink(A.DEFAULT_AVATAR)}`);
         expect(A.linkUrl(null, '')).toBe(`/avatar/#${A.encodeLink(null)}`);
@@ -926,6 +926,57 @@ describe('the corner chip', () => {
     });
 });
 
+describe('the suit and its tie (Steve, 2026-11-03)', () => {
+    test('the suit is a long-sleeved style, and the tie has its own colors, any custom one too, dark red unless chosen', () => {
+        expect(A.optionOf(A.SLEEVES, 'suit').label).toBe('Suit and tie');
+        expect(A.personConfig({ sleeves: 'suit', shirt: 'navy' }).sleeveColor).toBe(A.colorOf('shirt', 'navy'));
+        expect(A.DEFAULT_AVATAR.tieColor).toBe('darkRed');
+        expect(A.colorOf('tieColor', 'darkRed')).toBe(0x8a1f2c);
+        expect(A.normalizeAvatar({ tieColor: 'gold' }).tieColor).toBe('gold');
+        expect(A.normalizeAvatar({ tieColor: 'x241773' }).tieColor).toBe('x241773');
+        expect(A.colorOf('tieColor', 'x241773')).toBe(0x241773);
+        expect(A.normalizeAvatar({ tieColor: 'plaid' }).tieColor).toBe('darkRed');
+        // Every option a swatch can show, and no two alike.
+        const colors = A.TIE_COLORS.map((o) => o.color);
+        expect(colors.every((c) => Number.isInteger(c))).toBe(true);
+        expect(new Set(colors).size).toBe(colors.length);
+    });
+
+    test('an avatar saved or linked before there was a tie keeps everything, with the default tie', () => {
+        // Appended last, so a link made before reads every field where it was.
+        expect(A.FIELDS[A.FIELDS.length - 1][0]).toBe('tieColor');
+        const dressed = A.normalizeAvatar({ sleeves: 'jersey', shirt: 'teal', jerseyNumber: 'n8', jerseyName: 'SMITH' });
+        const old = { ...dressed };
+        delete old.tieColor;
+        expect(A.normalizeAvatar(old)).toEqual(dressed);
+        const parts = A.encodeLink(dressed).split('.');
+        expect(A.decodeLink(parts.slice(0, -1).join('.'))).toEqual(dressed);
+    });
+
+    test('a suit and its chosen tie travel in the link, and the sentence says them, and only on a suit', () => {
+        const suited = A.normalizeAvatar({ sleeves: 'suit', shirt: 'navy', tieColor: 'gold' });
+        expect(A.decodeLink(A.encodeLink(suited))).toEqual(suited);
+        expect(A.describeAvatar(suited)).toMatch(/a navy suit with a gold tie/);
+        expect(A.describeAvatar({ sleeves: 'suit', tieColor: 'x123456' })).toMatch(/suit with a custom-color tie/);
+        // "an", where the color's word asks for it.
+        expect(A.describeAvatar({ sleeves: 'long', tieColor: 'gold' })).not.toMatch(/tie/);
+    });
+
+    test('Surprise me can draw a suit, under a tie of the list, and every look may', () => {
+        for (const look of ['masculine', 'feminine', 'mixed']) {
+            let seed = 11;
+            const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+            const seen = new Set();
+            for (let i = 0; i < 400; i++) {
+                const a = A.randomAvatar(rand, { look });
+                seen.add(a.sleeves);
+                expect(A.optionOf(A.TIE_COLORS, a.tieColor)).toBeTruthy();
+            }
+            expect(`${look}: ${seen.has('suit')}`).toBe(`${look}: true`);
+        }
+    });
+});
+
 describe('the name on the jersey\'s back (Steve\'s son, 2026-10-28)', () => {
     test('typing makes a name: capitals, accents dropped, curly apostrophes made straight, anything else left out, twelve at most', () => {
         const cases = [
@@ -944,8 +995,10 @@ describe('the name on the jersey\'s back (Steve\'s son, 2026-10-28)', () => {
 
     test('only a real name is kept from anywhere; none is the default, and NONE is a name', () => {
         expect(A.DEFAULT_AVATAR.jerseyName).toBe('none');
-        // The field is the last, appended: links made before still read.
-        expect(A.FIELDS[A.FIELDS.length - 1][0]).toBe('jerseyName');
+        // The field was appended after those before it: links made before still
+        // read.
+        const keys = A.FIELDS.map(([key]) => key);
+        expect(keys.indexOf('jerseyName')).toBe(keys.indexOf('handedness') + 1);
         for (const name of ['SMITH', "O'NEIL", 'VAN DYKE', 'SMITH-JONES', 'ABCDEFGHIJKL', 'NONE', 'X']) {
             expect(A.normalizeAvatar({ jerseyName: name }).jerseyName).toBe(name);
             expect(A.isJerseyName(name)).toBe(true);
@@ -964,7 +1017,7 @@ describe('the name on the jersey\'s back (Steve\'s son, 2026-10-28)', () => {
     test('a link carries the name in characters a URL keeps as they are, and reads it back; an older link has none', () => {
         const a = A.normalizeAvatar({ sleeves: 'jersey', jerseyNumber: 'n8', jerseyName: "O'NEIL VAN" });
         const link = A.encodeLink(a);
-        expect(link.endsWith(".O%27NEIL_VAN")).toBe(true);
+        expect(link.endsWith(".O%27NEIL_VAN.darkRed")).toBe(true);
         expect(link).toMatch(/^[A-Za-z0-9\-._~!$&()*+,;=:@/?%]*$/);
         expect(link).not.toMatch(/[ ']/);
         expect(A.decodeLink(link)).toEqual(a);
@@ -974,7 +1027,7 @@ describe('the name on the jersey\'s back (Steve\'s son, 2026-10-28)', () => {
         expect(A.decodeLink(link.replace('%27', "'")).jerseyName).toBe("O'NEIL VAN");
         expect(A.decodeLink(link.replace('_', '%20')).jerseyName).toBe("O'NEIL VAN");
         // A link from before the name: the same figure, no name.
-        const older = link.slice(0, link.lastIndexOf('.'));
+        const older = link.slice(0, link.lastIndexOf('.O%27NEIL_VAN'));
         expect(A.decodeLink(older)).toEqual({ ...a, jerseyName: 'none' });
         // A broken or hostile name part is none; the rest still reads.
         for (const bad of ['%E0%A4%A', '%3Cscript%3E', 'smith', 'A'.repeat(40), '..']) {

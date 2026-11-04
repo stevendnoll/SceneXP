@@ -65,7 +65,7 @@ test('the ring: the hand up beside the chin, the forearm rising to it, the palm 
     expect(inner.x).toBeGreaterThan(0.8);
 });
 
-test('the drape: both arms lead, and from The Medal\'s spots one hand lands by the near side of the receiver\'s neck and the other behind the head, on every build', () => {
+test('the drape: both arms lead, and from The Medal\'s spots the hands come to the nape of the receiver in front, on every build', () => {
     const { templateOf } = await_templates();
     const D = P.DRAPE;
     const [receiver, giver] = templateOf('medal').cells[0].figures;
@@ -76,6 +76,7 @@ test('the drape: both arms lead, and from The Medal\'s spots one hand lands by t
     expect(giver.turn).toBe(D.giver.turn);
     for (const side of ['right', 'left']) expect(P.armsFor('drape', side)).toEqual(P.armsFor('drape'));
     expect(P.TWO_ARMED).toEqual(['drape']);
+    expect(P.ENLARGED).toContain('drape');
     /** A box point in the receiver's own frame: [across, up, forward]. */
     const inReceiver = (v) => {
         const [dx, dz] = [v.x - D.receiver.at[0], v.z - D.receiver.at[1]];
@@ -83,21 +84,29 @@ test('the drape: both arms lead, and from The Medal\'s spots one hand lands by t
         return [dx * c - dz * s, v.y, dx * s + dz * c];
     };
     for (const build of ['straight', 'slim', 'curvy', 'pear', 'broad', 'round', 'full']) {
-        const a = F.createAvatar({ build });
+        const a = F.createAvatar({ build, sleeves: 'long' });
         a.group.position.set(D.giver.at[0], 0, D.giver.at[1]);
         a.group.rotation.y = D.giver.turn;
         a.setPose(P.armsFor('drape'));
-        // The near hand: on the camera's right of the neck, over the shoulder.
-        const [nx, ny, nz] = inReceiver(handOf(a, 'left'));
-        expect(`${build} near ${nx > 0.05 && nx < 0.2}`).toBe(`${build} near true`);
-        expect(`${build} near height ${ny > 1.36 && ny < 1.48}`).toBe(`${build} near height true`);
-        expect(`${build} near depth ${Math.abs(nz) < 0.1}`).toBe(`${build} near depth true`);
-        // The far hand: behind the head, hidden, so no arm comes round the
-        // far side (Steve's QA: a headlock).
-        const [fx, fy, fz] = inReceiver(handOf(a, 'right'));
-        expect(`${build} far across ${Math.abs(fx) < 0.08}`).toBe(`${build} far across true`);
-        expect(`${build} far height ${fy > 1.45 && fy < 1.6}`).toBe(`${build} far height true`);
-        expect(`${build} far behind ${fz < -0.05}`).toBe(`${build} far behind true`);
+        const hands = [handOf(a, 'left'), handOf(a, 'right')].map(inReceiver);
+        for (const [x, y, z] of hands) {
+            // Behind the neck, near its middle, at neck height: the fingertips
+            // (a hand's length ahead) are what meet the ribbon.
+            expect(`${build} across ${Math.abs(x) < 0.12}`).toBe(`${build} across true`);
+            expect(`${build} height ${y > 1.33 && y < 1.42}`).toBe(`${build} height true`);
+            expect(`${build} behind ${z < -0.08 && z > -0.2}`).toBe(`${build} behind true`);
+        }
+        // One either side of the middle, not one on top of the other.
+        expect(hands[0][0]).toBeGreaterThan(hands[1][0] + 0.03);
+        // Neither hand is inside the giver's own chest.
+        for (const side of ['left', 'right']) {
+            a.group.position.set(0, 0, 0);
+            a.group.rotation.y = 0;
+            a.group.updateMatrixWorld(true);
+            expect(handOf(a, side).z).toBeGreaterThan(0.25);
+            a.group.position.set(D.giver.at[0], 0, D.giver.at[1]);
+            a.group.rotation.y = D.giver.turn;
+        }
         a.dispose();
     }
 });
@@ -289,7 +298,7 @@ test('the point and the aim stand the thumb up, so the index shows in profile an
     const dismiss = axesOf(figure, 'left');
     expect(dismiss.back.z).toBeLessThan(-0.5);
     expect(dismiss.thumb.x).toBeLessThan(-0.8);
-    expect(P.ENLARGED).toEqual(['dismiss', 'approve', 'present']);
+    expect(P.ENLARGED).toEqual(['dismiss', 'approve', 'present', 'drape']);
     figure.dispose();
 });
 

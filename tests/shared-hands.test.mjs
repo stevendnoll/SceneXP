@@ -67,19 +67,18 @@ test('the finger-and-thumb ring: an open loop on the thumb\'s side, closed all r
     }
 });
 
-test('a figure\'s hand made the ring keeps a name for it, sits as deep in the sleeve as a plain hand, and nothing for a figure with no such arm', () => {
+test('a figure\'s hand made the ring keeps a name for it, is smaller than the action hands, and nothing for a figure with no such arm', () => {
     const { person, hand } = handOn(-1);
     const arm = person.children.find((o) => o.userData && o.userData.isArm && o.userData.armSide === -1);
     const made = Hd.ringWith({ arms: { right: arm } }, 'right');
     expect(made).toBe(hand);
     expect(hand.userData.shape).toBe('ring');
     hand.geometry.computeBoundingBox();
-    // The palm's top, which runs up inside the sleeve, is where the same hand
-    // at the pointing size has it, though the whole hand is larger.
-    const unit = hand.userData.handUnit * Hd.FIST.scale;
-    // (Its bevel stands a tenth of a larger hand unit past that.)
-    expect(hand.geometry.boundingBox.max.y).toBeCloseTo((P.HAND.palmTop + 0.1 * Hd.RING.scale) * unit, 3);
-    expect(Hd.RING.scale).toBeGreaterThan(1);
+    // Measured on the hand: the palm's top, up inside the sleeve, its bevel a
+    // tenth of a unit past that (Steve's QA, 2026-11-03: too big beside a face).
+    expect(Hd.RING.scale).toBeLessThan(1);
+    const unit = hand.userData.handUnit * Hd.FIST.scale * Hd.RING.scale;
+    expect(hand.geometry.boundingBox.max.y).toBeCloseTo((P.HAND.palmTop + 0.1) * unit, 3);
     expect(Hd.ringWith({ arms: {} }, 'right')).toBeNull();
 });
 

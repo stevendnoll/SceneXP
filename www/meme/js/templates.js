@@ -411,13 +411,13 @@ const SIDE_GLANCE = {
 
 /** The Medal (template 11): one tight panel, the visitor twice over from the
  *  waist up, one hanging a medal on the other (scenes/medal.js), on a curtained
- *  stage with no seal or flag. The receiver faces the camera, the giver stands
- *  behind on the camera's right, head bowed to the work, both hands going behind
- *  the neck (poses.js `drape`, solved for these spots). Both in a dark suit, no
- *  hat, so the gold reads and the labels sit clear over the heads (Steve's QA,
- *  2026-11-03: too wide a shot, a jersey fighting the medal, a headlock). */
+ *  stage with no seal or flag. BOTH LOOK TO THE CAMERA'S LEFT (Steve's QA,
+ *  2026-11-03): the receiver in front, its back to the giver, who stands behind it
+ *  on the camera's right with both hands at the nape (poses.js `drape`, solved for
+ *  these spots) and head bowed to the work. Both in the shared suit, no hat, so
+ *  the gold reads on any avatar and the labels sit clear over the heads. */
 const SUITED_GRAY = 'x23262e';
-const SUITED = { shirt: SUITED_GRAY, sleeves: 'long', bottom: 'pants', bottomColor: SUITED_GRAY, shoeColor: 'black', legwearColor: 'black', armwearColor: SUITED_GRAY, hat: 'none' };
+const SUITED = { shirt: SUITED_GRAY, sleeves: 'suit', tieColor: 'darkRed', bottom: 'pants', bottomColor: SUITED_GRAY, shoeColor: 'black', legwearColor: 'black', armwearColor: SUITED_GRAY, hat: 'none' };
 const MEDAL = {
     id: 'medal',
     title: 'The Medal',
@@ -427,11 +427,11 @@ const MEDAL = {
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [{
         figures: [
-            { role: 'you', name: 'You, receiving', pose: 'stand', expression: 'bigGrin', at: [-0.17, 0.1], turn: 0.2, labelBelow: -0.22, overrides: SUITED },
-            { role: 'you', name: 'You, giving', pose: 'drape', expression: 'bigGrin', look: 0.3, nod: 0.15, at: [0.24, -0.13], turn: -0.8, labelBelow: -0.22, overrides: SUITED }
+            { role: 'you', name: 'You, receiving', pose: 'stand', expression: 'bigGrin', at: [-0.22, 0.14], turn: -0.7, labelBelow: -0.22, overrides: SUITED },
+            { role: 'you', name: 'You, giving', pose: 'drape', expression: 'bigGrin', nod: 0.15, at: [0.2, -0.12], turn: -0.75, labelBelow: -0.22, overrides: SUITED }
         ],
         captions: [{ label: 0 }, { label: 1 }, 'bottom'],
-        camera: { eye: [0.03, 1.4, 1.88], aim: [0.03, 1.38, 0], fov: 34 },
+        camera: { eye: [-0.01, 1.4, 1.95], aim: [-0.01, 1.36, 0], fov: 34 },
         backdrop: '#2C3E7A',
         floor: '#34384C',
         paint: { wall: 'curtain' },

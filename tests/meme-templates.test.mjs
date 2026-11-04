@@ -253,8 +253,16 @@ describe('the four templates of 2026-11-03', () => {
         expect([receiver.role, giver.role]).toEqual(['you', 'you']);
         expect(receiver.name).not.toBe(giver.name);
         expect([receiver.pose, giver.pose]).toEqual(['stand', 'drape']);
-        // Both in the suit that lets the gold read, on any avatar.
+        // Both looking to the camera's left, the receiver in front with its
+        // back to the giver, who stands on the camera's right (Steve, 2026-11-03).
+        expect(receiver.turn).toBeLessThan(-0.4);
+        expect(giver.turn).toBeLessThan(-0.4);
+        expect(Math.abs(receiver.turn - giver.turn)).toBeLessThan(0.2);
+        expect(receiver.at[1]).toBeGreaterThan(giver.at[1]);
+        expect(giver.at[0]).toBeGreaterThan(receiver.at[0]);
+        // Both in the shared suit, which lets the gold read on any avatar.
         expect(receiver.overrides).toEqual(giver.overrides);
+        expect(receiver.overrides.sleeves).toBe('suit');
         expect(receiver.overrides.hat).toBe('none');
         // Labels over the heads, clear of the medal on the chest.
         expect(receiver.labelBelow).toBeLessThan(0);

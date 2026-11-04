@@ -100,6 +100,7 @@ export const EDITOR_TABS = deepFreeze([
         id: 'clothes', label: 'Clothes', frame: 'body', fields: [
             { key: 'shirt', legend: 'Shirt', kind: 'swatch' },
             { key: 'sleeves', legend: 'Style', kind: 'text' },
+            { key: 'tieColor', legend: 'Tie color', kind: 'swatch', showWhen: { field: 'sleeves', value: 'suit' } },
             { key: 'jerseyNumber', legend: 'Jersey number', kind: 'number', showWhen: { field: 'sleeves', value: 'jersey' } },
             // The name over the back number (Steve's son, 2026-10-28).
             { key: 'jerseyName', legend: 'Name on the back', kind: 'name', showWhen: { field: 'sleeves', value: 'jersey' } },

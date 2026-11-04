@@ -108,7 +108,7 @@ export const HAIR_COLORS = Object.freeze([
 export const CUSTOM_COLOR = /^x[0-9a-f]{6}$/;
 
 /** The fields that take a custom color as well as their swatches. */
-export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor', 'frameColor', 'lensColor', 'numberColor', 'legwearColor', 'armwearColor']);
+export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor', 'frameColor', 'lensColor', 'numberColor', 'legwearColor', 'armwearColor', 'tieColor']);
 
 /** A custom color's id for a display hex (0x9c2b25 is "x9c2b25"). */
 export function customColor(hex) {
@@ -235,6 +235,20 @@ export const NUMBER_COLORS = Object.freeze([
     { id: 'navy', label: 'Navy', color: 0x1f2f55 },
     { id: 'green', label: 'Green', color: 0x2f7a4f },
     { id: 'orange', label: 'Orange', color: 0xe07a1f }
+]);
+
+/** The tie's color, shown only with the suit (Steve, 2026-11-03). */
+export const TIE_COLORS = Object.freeze([
+    { id: 'darkRed', label: 'Dark red', color: 0x8a1f2c },
+    { id: 'red', label: 'Red', color: 0xc0262a },
+    { id: 'navy', label: 'Navy', color: 0x1f2f55 },
+    { id: 'blue', label: 'Blue', color: 0x2a56d6 },
+    { id: 'black', label: 'Black', color: 0x1f2024 },
+    { id: 'silver', label: 'Silver', color: 0xb8bcc2 },
+    { id: 'gold', label: 'Gold', color: 0xd4a537 },
+    { id: 'green', label: 'Green', color: 0x2f7a4f },
+    { id: 'purple', label: 'Purple', color: 0x5b3a8c },
+    { id: 'pink', label: 'Pink', color: 0xd9779a }
 ]);
 
 /**
@@ -404,6 +418,9 @@ export const SLEEVES = Object.freeze([
     { id: 'turtleneck', label: 'Turtleneck', long: true, said: 'turtleneck' },
     { id: 'jersey', label: 'Sports jersey', said: 'sports jersey' },
     { id: 'buttonDown', label: 'Button-down shirt', long: true, dressShirt: true, said: 'button-down shirt' },
+    // Steve, 2026-11-03: the jacket in the shirt's color, a white shirt front
+    // and a tie in its own color (TIE_COLORS), drawn by avatar-wardrobe.
+    { id: 'suit', label: 'Suit and tie', long: true, said: 'suit' },
     { id: 'hoodie', label: 'Hoodie', long: true, said: 'hoodie' },
     // Steve's QA, 2026-10-25: a V-neck (short sleeves, the collar cut away).
     { id: 'vneck', label: 'V-neck shirt', said: 'V-neck shirt' },
@@ -594,7 +611,9 @@ export const FIELDS = Object.freeze([
     // Appended 2026-10-26 (Steve): which hand leads.
     Object.freeze(['handedness', HANDEDNESS]),
     // Appended 2026-10-28 (Steve's son): the name on the jersey's back.
-    Object.freeze(['jerseyName', JERSEY_NAMES])
+    Object.freeze(['jerseyName', JERSEY_NAMES]),
+    // Appended 2026-11-03 (Steve): the suit's tie.
+    Object.freeze(['tieColor', TIE_COLORS])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -643,7 +662,8 @@ export const DEFAULT_AVATAR = Object.freeze({
     armwear: 'none',
     armwearColor: 'black',
     handedness: 'right',
-    jerseyName: 'none'
+    jerseyName: 'none',
+    tieColor: 'darkRed'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
@@ -973,7 +993,7 @@ export function describeAvatar(avatar) {
         : '';
     const clothes = [
         `a ${muscles}${optionOf(BUILDS, a.build).said || word(BUILDS, a.build)} build${limbs.length ? ` with ${limbs.join(' and ')}` : ''}`,
-        (sleeves.said ? `a ${shirt} ${sleeves.said}` : a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`) + numbered,
+        (sleeves.said ? `a ${shirt} ${sleeves.said}` : a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`) + numbered + (a.sleeves === 'suit' ? ` with ${an(word(TIE_COLORS, a.tieColor))} tie` : ''),
         bottom.kind === 'bare' ? 'bare legs' : `${bottom.kind === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${bottom.label.toLowerCase()}`
     ];
     // The underlayer (2026-10-26): "black fishnets and black fishnet sleeves".

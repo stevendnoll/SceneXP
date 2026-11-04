@@ -1330,7 +1330,7 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     if (a.muscles === 'athletic') strengthenArms(person, ATHLETIC_ARMS);
     if (bottomKind === 'skirt') fitSkirt(person, person.children.find((o) => o.userData.isSkirt));
     // The wardrobe's shirts and bottoms (2026-10-25), over the rig's own.
-    if (SHIRT_SIZE[a.sleeves]) dressShirt(person, a.sleeves, colorOf('shirt', a.shirt), skin);
+    if (SHIRT_SIZE[a.sleeves]) dressShirt(person, a.sleeves, colorOf('shirt', a.shirt), skin, { tie: colorOf('tieColor', a.tieColor) });
     // A leotard or a bodysuit (2026-10-26): the shirt carried down into a
     // brief over the hips, the leotard's arms bare.
     if (ONE_PIECE.includes(a.sleeves)) dressOnePiece(person, a.sleeves, colorOf('shirt', a.shirt), skin);

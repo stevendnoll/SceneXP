@@ -172,6 +172,63 @@ describe('the shirts', () => {
         expect(named(shirt.person, 'collar').length).toBe(2);
     });
 
+    test('the suit: a shirt V, lapels, a collar, a tie in its own color, buttons and white cuffs, the rig\'s round collar gone (Steve, 2026-11-03)', () => {
+        const avatar = F.createAvatar({ sleeves: 'suit', shirt: 'navy', tieColor: 'gold' });
+        const person = avatar.person;
+        expect(named(person, 'shirtFront')).toHaveLength(1);
+        expect(named(person, 'lapel')).toHaveLength(2);
+        expect(named(person, 'collar')).toHaveLength(2);
+        expect(named(person, 'button')).toHaveLength(2);
+        expect(named(person, 'opening')).toHaveLength(1);
+        const white = new THREE.Color(W.SHIRT_SIZE.suit.white).getHex();
+        expect(named(person, 'shirtFront')[0].material.color.getHex()).toBe(white);
+        expect(named(person, 'cuff').map((c) => c.material.color.getHex())).toEqual([white, white]);
+        const ties = named(person, 'tie');
+        expect(ties).toHaveLength(2);
+        for (const t of ties) expect(t.material.color.getHex()).toBe(new THREE.Color(A.colorOf('tieColor', 'gold')).getHex());
+        // The lapels in the jacket's darker shade.
+        expect(named(person, 'lapel')[0].material.color.getHex()).toBe(new THREE.Color(A.colorOf('shirt', 'navy')).multiplyScalar(W.SHIRT_SIZE.suit.shade).getHex());
+        const { collar } = W.bodyParts(person);
+        expect(collar.visible).toBe(false);
+        // A custom tie, and a suit dressed with none named.
+        const custom = F.createAvatar({ sleeves: 'suit', tieColor: 'x123456' });
+        expect(named(custom.person, 'tie')[0].material.color.getHex()).toBe(new THREE.Color(0x123456).getHex());
+        const bare = F.createAvatar({});
+        W.dressShirt(bare.person, 'suit', 0x333333);
+        expect(named(bare.person, 'tie')[0].material.color.getHex()).toBe(new THREE.Color(A.colorOf('tieColor', 'darkRed')).getHex());
+        for (const a of [avatar, custom, bare]) a.dispose();
+    });
+
+    test('nothing of the suit stands above the chest or off it, on any build (the first cut, a flat cutout, stuck up and out)', () => {
+        const caster = new THREE.Raycaster();
+        for (const { id: build } of A.BUILDS) {
+            const avatar = F.createAvatar({ sleeves: 'suit', build });
+            const person = avatar.person;
+            person.updateMatrixWorld(true);
+            const { torso } = W.bodyParts(person);
+            /** The chest's front at (x, y), from a ray at the figure's front. */
+            const chestAt = (x, y) => {
+                caster.set(new THREE.Vector3(x, y, 1), new THREE.Vector3(0, 0, -1));
+                const hit = caster.intersectObject(torso)[0];
+                return hit ? hit.point.z : null;
+            };
+            for (const name of ['shirtFront', 'lapel', 'tie']) {
+                for (const piece of named(person, name)) {
+                    const pos = piece.geometry.attributes.position;
+                    for (let i = 0; i < pos.count; i++) {
+                        const v = new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(piece.matrixWorld);
+                        // A ray that misses means the corner is off the torso.
+                        const chest = chestAt(v.x, v.y);
+                        expect(`${build} ${name} corner on the chest: ${chest !== null}`).toBe(`${build} ${name} corner on the chest: true`);
+                        expect(`${build} ${name} clear of it: ${v.z - chest > 0}`).toBe(`${build} ${name} clear of it: true`);
+                        expect(`${build} ${name} lying on it: ${v.z - chest < 0.014}`).toBe(`${build} ${name} lying on it: true`);
+                    }
+                }
+            }
+            avatar.dispose();
+        }
+    });
+
     test('cuffs round both wrists on the knits and the hoodie, a band at a sweater\'s hem, a tall roll on a turtleneck', () => {
         for (const id of ['sweater', 'turtleneck', 'hoodie']) {
             const avatar = F.createAvatar({ sleeves: id });

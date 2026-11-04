@@ -44,12 +44,13 @@
  *             thing, the ring (hands-1.0.0) toward the face: the hand at
  *             (-0.28, 1.49, 0.27) (Steve's QA, 2026-11-03: the first cut's arm
  *             stood out in an L, with the hand off on its own)
- *   drape     BOTH arms, for hanging a ribbon from behind on someone standing
- *             just in front and to the figure's right, at the box spots The
- *             Medal names (`DRAPE`): one hand on the near side of that neck,
- *             (-0.06, 1.42, 0.40), and the other behind that head, (-0.21,
- *             1.50, 0.38), out of the camera's sight, so no arm comes round the
- *             far side (Steve's QA, 2026-11-03: that read as a headlock)
+ *   drape     BOTH arms, for fastening a ribbon at the nape of someone standing
+ *             just in front with their back to the figure, both looking the
+ *             same way (Steve's QA, 2026-11-03), at the box spots The Medal
+ *             names (`DRAPE`): open hands side by side at (-0.07, 1.38, 0.37)
+ *             and (-0.21, 1.38, 0.34), the fingertips at that nape and the backs
+ *             of the hands up and to the camera (fists there read as a pale
+ *             wedge on the shoulder)
  *
  * tests/meme-poses.test.mjs holds the hands to those regions, so a rig edit
  * that moves them is caught.
@@ -83,8 +84,8 @@ export const ARM_POSES = Object.freeze({
     ring: Object.freeze({ z: 0.35, x: -1.13, fore: -1.9, twist: 0 }),
     // Both arms named: neither rests.
     drape: Object.freeze({
-        right: Object.freeze({ z: -0.02, x: -1.29, fore: -1.43, twist: 0 }),
-        left: Object.freeze({ z: -0.7, x: -1.21, fore: -1.03, twist: 0 })
+        right: Object.freeze({ z: -0.03, x: -0.82, fore: -1.83, twist: -2.48 }),
+        left: Object.freeze({ z: -0.82, x: -0.97, fore: -1.19, twist: 0.28 })
     }),
     lookBack: null
 });
@@ -95,7 +96,7 @@ export const ARM_POSES = Object.freeze({
  *  profile, and a thing held in the fist stands upright, its barrel past
  *  the knuckles. */
 export const POINTING = Object.freeze(['point']);
-export const FISTED = Object.freeze(['aim', 'drape']);
+export const FISTED = Object.freeze(['aim']);
 
 /** The poses that make the finger-and-thumb ring of the leading hand. */
 export const RINGED = Object.freeze(['ring']);
@@ -106,7 +107,7 @@ export const TWO_ARMED = Object.freeze(['drape']);
 /** The poses whose leading hand stays the rig's open hand but is drawn
  *  at the fist's larger size, so every action hand is one size (Steve,
  *  2026-10-28: the Nope hand beside the Yep fist). */
-export const ENLARGED = Object.freeze(['dismiss', 'approve', 'present']);
+export const ENLARGED = Object.freeze(['dismiss', 'approve', 'present', 'drape']);
 
 /** Where The Handshake stands its two figures: `gap` apart across, each
  *  `aside` toward its own left (so the right hands meet), turned `turn`
@@ -114,11 +115,13 @@ export const ENLARGED = Object.freeze(['dismiss', 'approve', 'present']);
 export const HANDSHAKE = Object.freeze({ gap: 0.8, aside: 0.23, turn: 0.5 });
 
 /** Where The Medal stands its two figures, `at` [x, z] in the box and `turn`
- *  radians: the `receiver` facing the camera, the `giver` behind it on the
- *  camera's right, turned to it. `drape` is solved for these spots. */
+ *  radians, both looking to the camera's left (Steve's QA, 2026-11-03): the
+ *  `receiver` in front with its back to the `giver`, who stands behind it on the
+ *  camera's right, far enough over that the camera sees both faces. `drape` is
+ *  solved for these spots. */
 export const DRAPE = Object.freeze({
-    receiver: Object.freeze({ at: Object.freeze([-0.17, 0.1]), turn: 0.2 }),
-    giver: Object.freeze({ at: Object.freeze([0.24, -0.13]), turn: -0.8 })
+    receiver: Object.freeze({ at: Object.freeze([-0.22, 0.14]), turn: -0.7 }),
+    giver: Object.freeze({ at: Object.freeze([0.2, -0.12]), turn: -0.75 })
 });
 
 /** How far the head turns for each pose, radians (a figure that turns its

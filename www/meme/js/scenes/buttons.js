@@ -1,10 +1,11 @@
 // © 2026 Continuum Commerce LLC. MIT licensed.
 /**
  * scenes/buttons.js - the props of Two Buttons (template 14): the box's back
- * wall is a control panel, two big red buttons side by side, a dark plate
- * under each for the visitor's words, and the visitor's own hand coming down
- * between them, not yet decided, and below it their sweat flying. Generic (PRD
- * section 7): a red button is a red button.
+ * wall is a control panel, two big red buttons side by side, a dark plate over
+ * each for the visitor's words (where the format has them), and the visitor's
+ * own hand reaching up from below, between them, not yet decided (Steve's QA,
+ * 2026-11-03), and in the panel under it their sweat flying. Generic (PRD section
+ * 7): a red button is a red button.
  *
  * THE PANEL IS ON THE WALL, so the picture's close camera and the stage's
  * view of the whole box show the same thing, as a text tile's wall does. The
@@ -22,23 +23,24 @@ import { colorOf } from '../../../shared/js/avatar-1.0.0.min.js';
  *
  *   button  its middle `y` up the wall, a dome `r` across standing `rise`
  *           proud, in a `collar` a little wider
- *   plate   `w` by `h` under the button at height `y`, in a lighter `rim`
- *   hand    its middle `at`, turned `turn` to show a little of the thumb's
- *           side, `unit` meters a hand unit (large enough to read at thumbnail
- *           size), and a `sleeve` from `wrist` to `elbow` thick, up to the
- *           ceiling
+ *   plate   `w` by `h` over the button at height `y`, in a lighter `rim`
+ *   hand    its middle `at`, the fingers up and leaning `lean` radians toward
+ *           the wall, so the arm comes from the camera's side as your own arm
+ *           would, turned `turn` to show a little of the thumb's side, `unit`
+ *           meters a hand unit (large enough to read at thumbnail size), and a
+ *           `sleeve` from `wrist` to `elbow` thick, running down to the floor
  *   drops   flying off the sweating head (the `sweat` builder), `[x, y, z]`
  *           and a size each, a teardrop `r` across, `tall` times that
  */
 export const BUTTONS = Object.freeze({
     x: 0.43,
     button: Object.freeze({
-        y: 1.3, r: 0.225, rise: 0.13, color: 0xd81f26,
+        y: 0.88, r: 0.225, rise: 0.13, color: 0xd81f26,
         collar: Object.freeze({ r: 0.27, depth: 0.045, color: 0xc4c9cf })
     }),
-    plate: Object.freeze({ y: 0.82, w: 0.76, h: 0.4, depth: 0.02, color: 0x23262b, rim: 0x8d949b, rimWidth: 0.018 }),
+    plate: Object.freeze({ y: 1.38, w: 0.76, h: 0.4, depth: 0.02, color: 0x23262b, rim: 0x8d949b, rimWidth: 0.018 }),
     hand: Object.freeze({
-        at: Object.freeze([0, 1.46, -0.3]), turn: -0.45, unit: 0.1,
+        at: Object.freeze([0.03, 0.84, -0.32]), lean: 0.5, turn: 0.3, unit: 0.1,
         sleeve: Object.freeze({ wrist: 0.058, elbow: 0.078 })
     }),
     drops: Object.freeze({
@@ -101,17 +103,26 @@ export function build(box, config, { avatarFor = null } = {}) {
     const H = K.hand;
     const skin = mat(0xc9a07a, 0.7);
     const shirt = mat(0x2f3a46, 0.8);
+    // The arm's own frame, its +y up the forearm toward the fingertips, leaning
+    // toward the wall: a negative turn about x carries +y toward -z.
+    const arm = new THREE.Group();
+    arm.name = 'arm';
+    arm.position.set(H.at[0], H.at[1], H.at[2]);
+    arm.rotation.x = -H.lean;
+    group.add(arm);
     const hand = new THREE.Mesh(pressGeometry(H.unit, 1), skin);
     hand.name = 'hand';
-    hand.position.set(H.at[0], H.at[1], H.at[2]);
-    hand.rotation.y = H.turn;
-    group.add(hand);
-    const wrist = H.at[1] + H.unit;
-    const length = config.box.height - wrist;
-    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(H.sleeve.elbow, H.sleeve.wrist, length, 16), shirt);
+    // The hand's fingers run along its -y: a half turn stands them up with the
+    // back of the hand still toward the camera, as your own right hand's is.
+    hand.rotation.set(0, H.turn, Math.PI);
+    arm.add(hand);
+    const wrist = -H.unit;
+    // Down the arm's line to the floor, so its end is under it, not in the air.
+    const length = H.at[1] / Math.cos(H.lean);
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(H.sleeve.wrist, H.sleeve.elbow, length, 16), shirt);
     sleeve.name = 'sleeve';
-    sleeve.position.set(H.at[0], wrist + length / 2, H.at[2]);
-    group.add(sleeve);
+    sleeve.position.y = wrist - length / 2;
+    arm.add(sleeve);
     /** The hand in `avatar`'s skin and the sleeve in its shirt. */
     const redress = (avatar) => {
         if (!avatar) return;
