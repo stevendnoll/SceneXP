@@ -1298,13 +1298,13 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "camera": {
           "aim": [
             0.03,
-            1.2,
+            1.38,
             0,
           ],
           "eye": [
             0.03,
-            1.32,
-            2.9,
+            1.4,
+            1.88,
           ],
           "fov": 34,
         },
@@ -1320,29 +1320,49 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "figures": [
           {
             "at": [
-              -0.18,
-              0.12,
+              -0.17,
+              0.1,
             ],
             "expression": "bigGrin",
-            "labelBelow": -0.2,
+            "labelBelow": -0.22,
             "name": "You, receiving",
-            "nod": 0.1,
+            "overrides": {
+              "armwearColor": "x23262e",
+              "bottom": "pants",
+              "bottomColor": "x23262e",
+              "hat": "none",
+              "legwearColor": "black",
+              "shirt": "x23262e",
+              "shoeColor": "black",
+              "sleeves": "long",
+            },
             "pose": "stand",
             "role": "you",
             "turn": 0.2,
           },
           {
             "at": [
-              0.26,
-              -0.1,
+              0.24,
+              -0.13,
             ],
             "expression": "bigGrin",
-            "labelBelow": -0.2,
-            "look": 0.45,
+            "labelBelow": -0.22,
+            "look": 0.3,
             "name": "You, giving",
+            "nod": 0.15,
+            "overrides": {
+              "armwearColor": "x23262e",
+              "bottom": "pants",
+              "bottomColor": "x23262e",
+              "hat": "none",
+              "legwearColor": "black",
+              "shirt": "x23262e",
+              "shoeColor": "black",
+              "sleeves": "long",
+            },
             "pose": "drape",
             "role": "you",
-            "turn": -0.85,
+            "turn": -0.8,
           },
         ],
         "floor": "#34384C",
@@ -1471,17 +1491,17 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
   {
     "cells": [
       {
-        "backdrop": "#6A5F52",
+        "backdrop": "#54493D",
         "camera": {
           "aim": [
-            0.03,
-            1.36,
+            -0.02,
+            1.46,
             0,
           ],
           "eye": [
-            0.03,
-            1.42,
-            1.95,
+            -0.02,
+            1.48,
+            1.6,
           ],
           "fov": 34,
         },
@@ -1511,7 +1531,7 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
             "turn": -0.3,
           },
         ],
-        "floor": "#4A423A",
+        "floor": "#3A332B",
         "paint": {
           "wall": "stone",
         },
@@ -1574,13 +1594,13 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
         "camera": {
           "aim": [
             0,
-            1.55,
+            1.54,
             0,
           ],
           "eye": [
             0,
-            1.62,
-            1.05,
+            1.6,
+            0.92,
           ],
           "fov": 28,
         },
@@ -1594,11 +1614,16 @@ exports[`the catalog the catalog is frozen in the snapshot: a shipped template c
               0,
             ],
             "expression": "sweat",
+            "overrides": {
+              "hat": "none",
+              "lensColor": "clear",
+            },
             "pose": "stand",
             "role": "you",
             "turn": 0,
           },
         ],
+        "scene": "sweat",
       },
     ],
     "grid": [

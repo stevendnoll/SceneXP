@@ -294,6 +294,11 @@ describe('a caption', () => {
         C.drawCaptions(ctx, template, ['rent', 'boat'], [{ x: 0, y: 0, w: 800, h: 400 }], CONFIG.caption, { props: [{ left: plate, right: { ...plate, x: 400 } }] });
         const [rent, boat] = ctx.calls.filter((c) => c[0] === 'fillText');
         expect(rent[3]).toBeCloseTo(plate.y + plate.h / 2, 6);
+        // A plate is all a centered caption has, so its face fills it, well up
+        // from what a caption on a board gets (Steve's QA, 2026-11-03).
+        expect(rent[4].px).toBe(Math.round(plate.h * CONFIG.caption.plate.size));
+        expect(boat[4].px).toBe(Math.round(plate.h * CONFIG.caption.size * CONFIG.caption.board.scale));
+        expect(rent[4].px).toBeGreaterThan(boat[4].px);
         // Unsaid, a surface's caption stays at its top, as The Plan's does.
         expect(boat[3]).toBeCloseTo(plate.y + plate.h * CONFIG.caption.inset, 6);
     });

@@ -253,6 +253,9 @@ describe('the four templates of 2026-11-03', () => {
         expect([receiver.role, giver.role]).toEqual(['you', 'you']);
         expect(receiver.name).not.toBe(giver.name);
         expect([receiver.pose, giver.pose]).toEqual(['stand', 'drape']);
+        // Both in the suit that lets the gold read, on any avatar.
+        expect(receiver.overrides).toEqual(giver.overrides);
+        expect(receiver.overrides.hat).toBe('none');
         // Labels over the heads, clear of the medal on the chest.
         expect(receiver.labelBelow).toBeLessThan(0);
         expect(giver.labelBelow).toBeLessThan(0);
@@ -270,6 +273,8 @@ describe('the four templates of 2026-11-03', () => {
         ]);
         expect(t.cells[0].captions.map((c) => c.align)).toEqual(['center', 'center']);
         expect(t.cells[1].figures[0].expression).toBe('sweat');
+        expect(t.cells[1].figures[0].overrides).toEqual({ hat: 'none', lensColor: 'clear' });
+        expect(t.cells[1].scene).toBe('sweat');
     });
 
     test('nobody\'s name, place or line is in a template\'s words', () => {

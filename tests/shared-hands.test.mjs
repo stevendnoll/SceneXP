@@ -35,7 +35,7 @@ function handOn(side) {
     return { person, hand };
 }
 
-test('the finger-and-thumb ring: an open loop on the inner side, its tips meeting, on either hand (Meme Studio, 2026-11-03)', () => {
+test('the finger-and-thumb ring: an open loop on the thumb\'s side, closed all round, with three fingers up, on either hand (Meme Studio, 2026-11-03)', () => {
     const R = Hd.RING;
     const unit = 0.05;
     for (const inner of [1, -1]) {
@@ -43,42 +43,68 @@ test('the finger-and-thumb ring: an open loop on the inner side, its tips meetin
         const p = geometry.attributes.position;
         const pts = [];
         for (let i = 0; i < p.count; i++) pts.push(new THREE.Vector3().fromBufferAttribute(p, i));
-        const place = ([y, out]) => new THREE.Vector3(inner * (R.x + out * Math.sin(R.open)) * unit, y * unit, -out * Math.cos(R.open) * unit);
-        // Nothing of the hand in the hole, a good share of the loop's radius.
-        const hole = place(R.center);
-        const nearest = Math.min(...pts.map((v) => v.distanceTo(hole)));
-        expect(nearest).toBeGreaterThan(R.r * unit * 0.5);
-        // And it is closed, not a hook: a ray from the hole's middle meets the
-        // hand within about the loop's radius whichever way it goes in the
-        // loop's plane.
+        // The loop stands in the palm's plane, past the palm on the thumb's
+        // side, and nothing of the hand is in its hole.
+        const hole = new THREE.Vector3(inner * R.center[0] * unit, R.center[1] * unit, 0);
+        expect(Math.abs(hole.x)).toBeGreaterThan((Hd.RING.r * 0.5 + 0.7) * unit);
+        expect(Math.min(...pts.map((v) => v.distanceTo(hole)))).toBeGreaterThan(R.r * unit * 0.5);
+        // Closed, not a hook: a ray from the hole's middle meets the hand
+        // within about the loop's radius whichever way it goes in that plane.
         const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
         const caster = new THREE.Raycaster();
-        const along = (t) => new THREE.Vector3(inner * -Math.sin(t) * Math.sin(R.open), Math.cos(t), Math.sin(t) * Math.cos(R.open)).normalize();
         for (let a = 0; a < 360; a += 15) {
-            caster.set(hole, along((a * Math.PI) / 180));
-            caster.far = R.r * unit * 1.6;
+            const t = (a * Math.PI) / 180;
+            caster.set(hole, new THREE.Vector3(Math.cos(t), Math.sin(t), 0));
+            caster.far = R.r * unit * 1.5;
             expect(`${inner} at ${a}: ${caster.intersectObject(mesh).length > 0}`).toBe(`${inner} at ${a}: true`);
         }
-        // On the inner side of the palm's middle.
-        expect(hole.x * inner).toBeGreaterThan(0);
+        // Three fingers up past the loop's top, on the far side of the palm
+        // from it (a hand, not a hook on a card).
+        const beyond = pts.filter((v) => v.y < (R.center[1] - R.r - 0.25) * unit);
+        expect(beyond.length).toBeGreaterThan(0);
+        expect(Math.max(...beyond.map((v) => v.x * inner))).toBeLessThan(0.5 * unit);
         geometry.dispose();
     }
 });
 
-test('a figure\'s hand made the ring keeps a name for it, a larger size, and nothing for a figure with no such arm', () => {
+test('a figure\'s hand made the ring keeps a name for it, sits as deep in the sleeve as a plain hand, and nothing for a figure with no such arm', () => {
     const { person, hand } = handOn(-1);
     const arm = person.children.find((o) => o.userData && o.userData.isArm && o.userData.armSide === -1);
     const made = Hd.ringWith({ arms: { right: arm } }, 'right');
     expect(made).toBe(hand);
     expect(hand.userData.shape).toBe('ring');
     hand.geometry.computeBoundingBox();
-    const span = hand.geometry.boundingBox.max.y - hand.geometry.boundingBox.min.y;
-    const pointing = Hd.pointingHandGeometry(hand.userData.handUnit * Hd.FIST.scale, 1);
-    pointing.computeBoundingBox();
+    // The palm's top, which runs up inside the sleeve, is where the same hand
+    // at the pointing size has it, though the whole hand is larger.
+    const unit = hand.userData.handUnit * Hd.FIST.scale;
+    // (Its bevel stands a tenth of a larger hand unit past that.)
+    expect(hand.geometry.boundingBox.max.y).toBeCloseTo((P.HAND.palmTop + 0.1 * Hd.RING.scale) * unit, 3);
     expect(Hd.RING.scale).toBeGreaterThan(1);
-    expect(span).toBeGreaterThan(0);
-    pointing.dispose();
     expect(Hd.ringWith({ arms: {} }, 'right')).toBeNull();
+});
+
+test('a hand about to press: the index straight out past the rest, the other three curled back, on either hand (Two Buttons, 2026-11-03)', () => {
+    const unit = 0.1;
+    for (const inner of [1, -1]) {
+        const geometry = Hd.pressGeometry(unit, inner);
+        const p = geometry.attributes.position;
+        const pts = [];
+        for (let i = 0; i < p.count; i++) pts.push(new THREE.Vector3().fromBufferAttribute(p, i));
+        const tip = pts.reduce((best, v) => (v.y < best.y ? v : best), pts[0]);
+        // The index is on the thumb's side of the hand, and alone at the end.
+        expect(tip.x * inner).toBeGreaterThan(0.3 * unit);
+        const palmBottom = (P.HAND.palmTop - P.HAND.palm[1]) * unit;
+        // Past the knuckles by more than a palm's width, whatever PRESS says: a
+        // finger that shows at a thumbnail.
+        expect(tip.y).toBeLessThan(palmBottom - 1.5 * unit);
+        const past = pts.filter((v) => v.y < palmBottom - unit * 0.9);
+        expect(Math.min(...past.map((v) => v.x * inner))).toBeGreaterThan(0.2 * unit);
+        // The others are curled toward the palm side, not out straight.
+        const curled = pts.filter((v) => v.x * inner < 0.2 * unit && v.y < palmBottom);
+        expect(curled.length).toBeGreaterThan(0);
+        expect(Math.min(...curled.map((v) => v.z))).toBeLessThan(-Hd.PRESS.curled.second * unit);
+        geometry.dispose();
+    }
 });
 
 test('a hand on a ball: turned to face it, fingers bent onto it, thumb round it, nothing inside it (X\'s and O\'s, 2026-11-01)', () => {

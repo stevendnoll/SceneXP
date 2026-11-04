@@ -2,18 +2,20 @@
 /**
  * scenes/buttons.js - the props of Two Buttons (template 14): the box's back
  * wall is a control panel, two big red buttons side by side, a dark plate
- * under each for the visitor's words, and a gloved finger coming down between
- * them, not yet decided. Generic (PRD section 7): a red button is a red
- * button.
+ * under each for the visitor's words, and the visitor's own hand coming down
+ * between them, not yet decided, and below it their sweat flying. Generic (PRD
+ * section 7): a red button is a red button.
  *
  * THE PANEL IS ON THE WALL, so the picture's close camera and the stage's
  * view of the whole box show the same thing, as a text tile's wall does. The
- * hand is a prop and not the visitor's arm: a figure would stand in the box
- * with its head in view on the stage, and a panel of no face would offer face
- * chips. A glove has no skin tone to keep in step with the avatar.
+ * hand is a prop and not a figure, since a figure would stand in the box with
+ * its head in view on the stage, and a panel of no face would offer face chips,
+ * but it wears the visitor's skin and sleeve (Steve's QA, 2026-11-03: a glove on
+ * a dark pole read as a popsicle), kept in step by `redress`.
  */
 
-import { pointingHandGeometry } from '../../../shared/js/hands-1.0.0.min.js';
+import { pressGeometry } from '../../../shared/js/hands-1.0.0.min.js';
+import { colorOf } from '../../../shared/js/avatar-1.0.0.min.js';
 
 /**
  * The measures, meters in the box. `x` either side of the middle:
@@ -21,9 +23,12 @@ import { pointingHandGeometry } from '../../../shared/js/hands-1.0.0.min.js';
  *   button  its middle `y` up the wall, a dome `r` across standing `rise`
  *           proud, in a `collar` a little wider
  *   plate   `w` by `h` under the button at height `y`, in a lighter `rim`
- *   hand    its middle `at`, `unit` meters a hand unit (large enough to read
- *           at thumbnail size), and a `cuff` of radius `r` from the wrist up
- *           to the ceiling
+ *   hand    its middle `at`, turned `turn` to show a little of the thumb's
+ *           side, `unit` meters a hand unit (large enough to read at thumbnail
+ *           size), and a `sleeve` from `wrist` to `elbow` thick, up to the
+ *           ceiling
+ *   drops   flying off the sweating head (the `sweat` builder), `[x, y, z]`
+ *           and a size each, a teardrop `r` across, `tall` times that
  */
 export const BUTTONS = Object.freeze({
     x: 0.43,
@@ -33,8 +38,16 @@ export const BUTTONS = Object.freeze({
     }),
     plate: Object.freeze({ y: 0.82, w: 0.76, h: 0.4, depth: 0.02, color: 0x23262b, rim: 0x8d949b, rimWidth: 0.018 }),
     hand: Object.freeze({
-        at: Object.freeze([0, 1.46, -0.3]), unit: 0.11, color: 0xe8c33a,
-        cuff: Object.freeze({ r: 0.052, color: 0x2f3a46 })
+        at: Object.freeze([0, 1.46, -0.3]), turn: -0.45, unit: 0.1,
+        sleeve: Object.freeze({ wrist: 0.058, elbow: 0.078 })
+    }),
+    drops: Object.freeze({
+        r: 0.014, tall: 1.7, color: 0x7cc4f2,
+        at: Object.freeze([
+            Object.freeze([-0.2, 1.71, 0.06, 1.1]), Object.freeze([-0.27, 1.62, 0.03, 0.8]), Object.freeze([0.17, 1.74, 0.05, 1]),
+            Object.freeze([0.23, 1.67, 0.03, 1.2]), Object.freeze([0.29, 1.58, 0.01, 0.9]), Object.freeze([0.2, 1.49, 0.06, 1.1]),
+            Object.freeze([-0.23, 1.48, 0.05, 0.9])
+        ])
     })
 });
 
@@ -50,7 +63,7 @@ export function plateCorners(s, wall, K = BUTTONS) {
 
 /** The two buttons, their plates and the hand in `box`. Returns the group,
  *  its `userData.surfaces` the plates (`left` and `right`, the camera's). */
-export function build(box, config) {
+export function build(box, config, { avatarFor = null } = {}) {
     const K = BUTTONS;
     const wall = -config.box.depth / 2;
     const group = new THREE.Group();
@@ -86,16 +99,27 @@ export function build(box, config) {
         group.add(plate);
     }
     const H = K.hand;
-    const hand = new THREE.Mesh(pointingHandGeometry(H.unit, 1), mat(H.color, 0.55));
+    const skin = mat(0xc9a07a, 0.7);
+    const shirt = mat(0x2f3a46, 0.8);
+    const hand = new THREE.Mesh(pressGeometry(H.unit, 1), skin);
     hand.name = 'hand';
     hand.position.set(H.at[0], H.at[1], H.at[2]);
+    hand.rotation.y = H.turn;
     group.add(hand);
     const wrist = H.at[1] + H.unit;
     const length = config.box.height - wrist;
-    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(H.cuff.r, H.cuff.r, length, 16), mat(H.cuff.color, 0.8));
-    cuff.name = 'cuff';
-    cuff.position.set(H.at[0], wrist + length / 2, H.at[2]);
-    group.add(cuff);
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(H.sleeve.elbow, H.sleeve.wrist, length, 16), shirt);
+    sleeve.name = 'sleeve';
+    sleeve.position.set(H.at[0], wrist + length / 2, H.at[2]);
+    group.add(sleeve);
+    /** The hand in `avatar`'s skin and the sleeve in its shirt. */
+    const redress = (avatar) => {
+        if (!avatar) return;
+        skin.color.setHex(colorOf('skin', avatar.skin));
+        shirt.color.setHex(colorOf('shirt', avatar.shirt));
+    };
+    redress(avatarFor && avatarFor('you'));
+    group.userData.redress = (roleId, avatar) => { if (roleId === 'you') redress(avatar); };
     group.traverse((o) => {
         if (o.isMesh) {
             o.castShadow = true;
@@ -103,6 +127,28 @@ export function build(box, config) {
         }
     });
     group.userData.surfaces = { left: plateCorners(-1, wall), right: plateCorners(1, wall) };
+    box.add(group);
+    return group;
+}
+
+/** The sweat flying off the head in `box`, in the panel under the buttons: big
+ *  enough to read at thumbnail size, as the face's own drops are not on a phone.
+ *  Returns the group. */
+export function sweat(box) {
+    const D = BUTTONS.drops;
+    const group = new THREE.Group();
+    group.name = 'flyingSweat';
+    const water = new THREE.MeshStandardMaterial({ color: D.color, roughness: 0.15, metalness: 0.1 });
+    const ball = new THREE.SphereGeometry(D.r, 12, 10);
+    for (const [x, y, z, size] of D.at) {
+        const drop = new THREE.Mesh(ball, water);
+        drop.name = 'drop';
+        drop.position.set(x, y, z);
+        drop.scale.set(size, size * D.tall, size * 0.8);
+        // Leaning away from the head, as they fly off it.
+        drop.rotation.z = -Math.atan2(x, y - 1.3) * 0.7;
+        group.add(drop);
+    }
     box.add(group);
     return group;
 }

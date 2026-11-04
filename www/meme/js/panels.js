@@ -348,7 +348,7 @@ export function buildPanel(cell, config, avatarFor, { mobile = false, tint = nul
         box.add(figure.group);
         return figure;
     });
-    const props = cell.scene && SCENES[cell.scene] ? SCENES[cell.scene](box, config, { figures, mobile, cell }) : null;
+    const props = cell.scene && SCENES[cell.scene] ? SCENES[cell.scene](box, config, { figures, mobile, cell, avatarFor }) : null;
     return {
         group: box,
         box,
@@ -374,6 +374,13 @@ export function buildPanel(cell, config, avatarFor, { mobile = false, tint = nul
             // A prop fitted to the figure (a helmet) is fitted again.
             if (props && props.userData && typeof props.userData.fit === 'function') props.userData.fit(figure);
             return figure;
+        },
+        /** The role's `avatar` changed: a prop that wears it follows (Two
+         *  Buttons' hand, which is no figure). True when one did. */
+        redress(roleId, avatar) {
+            if (!props || !props.userData || typeof props.userData.redress !== 'function') return false;
+            props.userData.redress(roleId, avatar);
+            return true;
         },
         /** The back wall in the visitor's `tint` (null for the template's
          *  own). True when the wall follows one. */

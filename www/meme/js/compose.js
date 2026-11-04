@@ -245,6 +245,7 @@ export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], 
     let k = 0;
     const onBoard = C.board ? { ...C, size: C.size * C.board.scale, maxLines: C.board.maxLines } : C;
     const onTile = { ...C, ...C.tile };
+    const onPlate = { ...C, ...C.plate };
     template.cells.forEach((cell, i) => {
         // The labels drawn on this panel so far, so the next keeps clear.
         const placed = [];
@@ -253,7 +254,7 @@ export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], 
             if (!rects[i]) continue;
             if (slot && typeof slot === 'object' && slot.prop) {
                 const surface = props[i] ? props[i][slot.prop] : null;
-                if (surface) drawCaption(ctx, text, surface, slot.align || 'top', onBoard);
+                if (surface) drawCaption(ctx, text, surface, slot.align || 'top', slot.align === 'center' ? onPlate : onBoard);
             } else if (slot && typeof slot === 'object') {
                 const point = anchors[i] ? anchors[i][slot.label] : null;
                 if (label) {

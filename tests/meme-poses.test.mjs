@@ -36,16 +36,19 @@ function handOf(figure, side) {
     return hand.getWorldPosition(new THREE.Vector3());
 }
 
-test('the ring: the hand raised beside the shoulder, the forearm up, the ring facing the camera with the other arm at rest', () => {
+test('the ring: the hand up beside the chin, the forearm rising to it, the palm to the camera at the template\'s stance, the other arm at rest', () => {
     const figure = F.createAvatar({});
     figure.setPose(P.armsFor('ring'));
     const hand = handOf(figure, 'right');
-    expect(hand.distanceTo(new THREE.Vector3(-0.35, 1.52, 0.25))).toBeLessThan(0.03);
+    expect(hand.distanceTo(new THREE.Vector3(-0.28, 1.49, 0.27))).toBeLessThan(0.03);
     const elbow = figure.arms.right.userData.forearm.getWorldPosition(new THREE.Vector3());
     expect(hand.clone().sub(elbow).normalize().y).toBeGreaterThan(0.9);
+    // Hand and face read as one thing: within a head's width or so of the
+    // chin, with the elbow low and in, not standing out in an L.
+    expect(hand.y).toBeLessThan(figure.head().y);
+    expect(Math.abs(elbow.x)).toBeLessThan(0.36);
     expect(P.armsFor('ring').left).toEqual(P.armsFor('stand').left);
     expect(P.RINGED).toContain('ring');
-    // The template's stance turns the figure toward the raised hand's side.
     const { templateOf } = await_templates();
     const spec = templateOf('notThatSimple').cells[0].figures[0];
     expect(spec.pose).toBe('ring');
@@ -54,14 +57,15 @@ test('the ring: the hand raised beside the shoulder, the forearm up, the ring fa
     figure.group.updateMatrixWorld(true);
     let mesh = null;
     figure.arms.right.traverse((o) => { if (!mesh && o.userData.isHand) mesh = o; });
-    const open = 0.75;
-    // The ring's plane faces out on the thumb's side and the back of the hand
-    // (hands-1.0.0 RING.open): its normal is the way a camera must look.
-    const normal = new THREE.Vector3(Math.cos(open), 0, Math.sin(open)).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
-    expect(normal.dot(new THREE.Vector3(0, 0, 1))).toBeGreaterThan(0.9);
+    // The ring lies in the palm's plane, so the palm's normal is its own.
+    const palm = new THREE.Vector3(0, 0, -1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+    expect(palm.dot(new THREE.Vector3(0, 0, 1))).toBeGreaterThan(0.9);
+    // And the thumb's side, where the ring stands, is toward the face.
+    const inner = new THREE.Vector3(1, 0, 0).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+    expect(inner.x).toBeGreaterThan(0.8);
 });
 
-test('the drape: both arms lead, and from The Medal\'s spots the hands land either side of the receiver\'s neck, on every build', () => {
+test('the drape: both arms lead, and from The Medal\'s spots one hand lands by the near side of the receiver\'s neck and the other behind the head, on every build', () => {
     const { templateOf } = await_templates();
     const D = P.DRAPE;
     const [receiver, giver] = templateOf('medal').cells[0].figures;
@@ -72,21 +76,28 @@ test('the drape: both arms lead, and from The Medal\'s spots the hands land eith
     expect(giver.turn).toBe(D.giver.turn);
     for (const side of ['right', 'left']) expect(P.armsFor('drape', side)).toEqual(P.armsFor('drape'));
     expect(P.TWO_ARMED).toEqual(['drape']);
+    /** A box point in the receiver's own frame: [across, up, forward]. */
+    const inReceiver = (v) => {
+        const [dx, dz] = [v.x - D.receiver.at[0], v.z - D.receiver.at[1]];
+        const [c, s] = [Math.cos(D.receiver.turn), Math.sin(D.receiver.turn)];
+        return [dx * c - dz * s, v.y, dx * s + dz * c];
+    };
     for (const build of ['straight', 'slim', 'curvy', 'pear', 'broad', 'round', 'full']) {
         const a = F.createAvatar({ build });
         a.group.position.set(D.giver.at[0], 0, D.giver.at[1]);
         a.group.rotation.y = D.giver.turn;
         a.setPose(P.armsFor('drape'));
-        const neck = new THREE.Vector3(D.receiver.at[0], 1.42, D.receiver.at[1]);
-        // The receiver's own right and left, in the box.
-        const across = new THREE.Vector3(Math.cos(D.receiver.turn), 0, -Math.sin(D.receiver.turn));
-        const [nearSide, farSide] = [handOf(a, 'left'), handOf(a, 'right')];
-        expect(`${build} near ${nearSide.clone().sub(neck).dot(across) > 0.05}`).toBe(`${build} near true`);
-        expect(`${build} far ${farSide.clone().sub(neck).dot(across) < -0.03}`).toBe(`${build} far true`);
-        for (const hand of [nearSide, farSide]) {
-            expect(`${build} ${hand.distanceTo(neck) < 0.17}`).toBe(`${build} true`);
-            expect(Math.abs(hand.y - neck.y)).toBeLessThan(0.05);
-        }
+        // The near hand: on the camera's right of the neck, over the shoulder.
+        const [nx, ny, nz] = inReceiver(handOf(a, 'left'));
+        expect(`${build} near ${nx > 0.05 && nx < 0.2}`).toBe(`${build} near true`);
+        expect(`${build} near height ${ny > 1.36 && ny < 1.48}`).toBe(`${build} near height true`);
+        expect(`${build} near depth ${Math.abs(nz) < 0.1}`).toBe(`${build} near depth true`);
+        // The far hand: behind the head, hidden, so no arm comes round the
+        // far side (Steve's QA: a headlock).
+        const [fx, fy, fz] = inReceiver(handOf(a, 'right'));
+        expect(`${build} far across ${Math.abs(fx) < 0.08}`).toBe(`${build} far across true`);
+        expect(`${build} far height ${fy > 1.45 && fy < 1.6}`).toBe(`${build} far height true`);
+        expect(`${build} far behind ${fz < -0.05}`).toBe(`${build} far behind true`);
         a.dispose();
     }
 });

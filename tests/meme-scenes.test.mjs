@@ -3,10 +3,11 @@
  * The props and staging of the four templates of 2026-11-03, on the real
  * three, through each cell's own camera at the real pictures' shapes:
  * Two Buttons' plates and buttons stay in frame at both sizes and short of the
- * side wall's shadow; The Medal hangs on the one being honored, on any build,
- * and stays there when that figure is built again; Not That Simple's hand is
- * on one side and the torch on the other, its cloak on any figure; and The Side
- * Glance's panels differ by the eyes and nothing else.
+ * side wall's shadow, its hand wears the visitor's skin and sleeve; The Medal
+ * hangs on the one being honored, on any build, and stays there when that figure
+ * is built again, both in a shirt front and tie; Not That Simple's hand is on one
+ * side and the torch on the other, its cloak on any figure; and The Side Glance's
+ * panels differ by the eyes and nothing else.
  */
 import { jest } from '@jest/globals';
 import { loadRealThree } from './helpers/real-three.mjs';
@@ -23,6 +24,7 @@ let HALL;
 let chestFront;
 let slotLabel;
 let createAvatar;
+let colorOf;
 
 beforeAll(async () => {
     THREE = await loadRealThree();
@@ -32,7 +34,7 @@ beforeAll(async () => {
     T = await import('../www/meme/js/templates.js');
     C = await import('../www/meme/js/compose.js');
     ({ MEME_PAGE: CONFIG } = await import('../www/meme/js/config.js'));
-    ({ DEFAULT_AVATAR } = await import('../www/shared/js/avatar-1.0.0.js'));
+    ({ DEFAULT_AVATAR, colorOf } = await import('../www/shared/js/avatar-1.0.0.js'));
     ({ BUTTONS } = await import('../www/meme/js/scenes/buttons.js'));
     ({ MEDAL } = await import('../www/meme/js/scenes/medal.js'));
     ({ HALL } = await import('../www/meme/js/scenes/hall.js'));
@@ -117,7 +119,7 @@ describe('Two Buttons', () => {
         expect(halfWide).toBeLessThan(B.width / 2 - B.depth * azimuth);
     });
 
-    test('a finger comes down between the buttons in front of the wall, and the plates are drawn on', () => {
+    test('a finger comes down between the buttons in front of the wall, no wider than the gap, and the panel holds no figure', () => {
         const { panel } = shot('twoButtons', 0, 2, 1);
         const hand = panel.box.getObjectByName('hand');
         expect(hand.position.x).toBe(0);
@@ -126,11 +128,54 @@ describe('Two Buttons', () => {
         const tip = hand.position.y + hand.geometry.boundingBox.min.y;
         expect(tip).toBeLessThan(BUTTONS.button.y);
         expect(tip).toBeGreaterThan(BUTTONS.plate.y + BUTTONS.plate.h / 2);
-        // No wider than the gap between the collars.
         const half = Math.max(Math.abs(hand.geometry.boundingBox.min.x), Math.abs(hand.geometry.boundingBox.max.x));
         expect(half).toBeLessThan(BUTTONS.x - BUTTONS.button.collar.r);
         // A panel with no figure offers no face and makes nobody's label.
         expect(panel.figures).toEqual([]);
+        panel.dispose();
+    });
+
+    test('the hand wears the visitor\'s skin and sleeve, and follows when the visitor changes, and no other role\'s', () => {
+        const dressed = { ...DEFAULT_AVATAR, skin: 'deep', shirt: 'teal' };
+        const { panel } = shot('twoButtons', 0, 2, 1, dressed);
+        const hand = panel.box.getObjectByName('hand');
+        const sleeve = panel.box.getObjectByName('sleeve');
+        expect(hand.material.color.getHex()).toBe(new THREE.Color(colorOf('skin', 'deep')).getHex());
+        expect(sleeve.material.color.getHex()).toBe(new THREE.Color(colorOf('shirt', 'teal')).getHex());
+        const then = hand.material.color.getHex();
+        expect(panel.redress('friend', { ...dressed, skin: 'fair' })).toBe(true);
+        expect(hand.material.color.getHex()).toBe(then);
+        expect(panel.redress('you', { ...dressed, skin: 'fair', shirt: 'white' })).toBe(true);
+        expect(hand.material.color.getHex()).toBe(new THREE.Color(colorOf('skin', 'fair')).getHex());
+        expect(sleeve.material.color.getHex()).toBe(new THREE.Color(colorOf('shirt', 'white')).getHex());
+        panel.dispose();
+        // A panel whose props wear nobody says so.
+        const plain = shot('plan', 0, 1, 1).panel;
+        expect(plain.redress('you', dressed)).toBe(false);
+        plain.dispose();
+    });
+
+    test('below it, the visitor bareheaded with clear lenses, and sweat flying that reads at thumbnail size, clear of the head', () => {
+        const [w, h] = [1054, 521];
+        const { panel, camera } = shot('twoButtons', 1, w, h, { hat: 'cap', glasses: 'sunglasses' });
+        const figure = panel.figures[0];
+        expect(figure.avatar.hat).toBe('none');
+        expect(figure.person.getObjectByName('glasses').children.filter((o) => o.name === 'lens')).toHaveLength(0);
+        const drops = panel.box.getObjectByName('flyingSweat').children;
+        expect(drops.length).toBeGreaterThanOrEqual(6);
+        const head = figure.head();
+        for (const drop of drops) {
+            const at = drop.getWorldPosition(new THREE.Vector3());
+            const p = P.projectPoint(at.toArray(), camera, w, h);
+            expect(p.x).toBeGreaterThan(0);
+            expect(p.x).toBeLessThan(w);
+            expect(p.y).toBeGreaterThan(0);
+            expect(p.y).toBeLessThan(h);
+            expect(at.distanceTo(head)).toBeGreaterThan(0.14);
+            // At least 25 px on the 1080 picture: about 8 on a 360 px phone.
+            const top = P.projectPoint([at.x, at.y + BUTTONS.drops.r * drop.scale.y, at.z], camera, w, h);
+            expect(Math.abs(p.y - top.y) * 2).toBeGreaterThan(25);
+        }
         panel.dispose();
     });
 
@@ -145,12 +190,14 @@ describe('Two Buttons', () => {
 describe('The Medal', () => {
     test('the medal hangs on the one being honored, and on nobody else, when built and when built again', () => {
         const { panel } = shot('medal', 0, 1, 1);
-        const has = (i) => Boolean(panel.figures[i].person.getObjectByName('medal'));
+        const has = (i, name = 'medal') => Boolean(panel.figures[i].person.getObjectByName(name));
         expect([has(0), has(1)]).toEqual([true, false]);
         panel.replaceFigure(0, { expression: 'crying' });
         expect(has(0)).toBe(true);
         panel.replaceFigure(1, { expression: 'crying' });
         expect(has(1)).toBe(false);
+        // The shirt front is on both, built again or not.
+        expect([has(0, 'shirtFront'), has(1, 'shirtFront')]).toEqual([true, true]);
         panel.dispose();
     });
 
@@ -161,7 +208,7 @@ describe('The Medal', () => {
             const figure = panel.figures[0];
             const medal = figure.person.getObjectByName('medal');
             const disc = medal.getObjectByName('disc');
-            fronts[build] = bareChest({ build });
+            fronts[build] = bareChest({ build, ...T.templateOf('medal').cells[0].figures[0].overrides });
             expect(`${build} ${disc.position.z - fronts[build] > 0}`).toBe(`${build} true`);
             // Standing on the chest, not out in the air before it.
             expect(`${build} ${disc.position.z - fronts[build] < 0.03}`).toBe(`${build} true`);
@@ -174,6 +221,23 @@ describe('The Medal', () => {
         }
         // Measured on the build: a round middle stands deeper than a slim one.
         expect(fronts.round).toBeGreaterThan(fronts.slim + 0.02);
+    });
+
+    test('over any clothes: a dark suit, no hat, and the shirt front and ribbon in front of the chest, the disc in front of them', () => {
+        const { panel } = shot('medal', 0, 1, 1, { sleeves: 'jersey', shirt: 'teal', hat: 'cap', bottom: 'shorts' });
+        const [receiver, giver] = panel.figures;
+        for (const f of [receiver, giver]) {
+            expect(f.avatar.hat).toBe('none');
+            expect(f.avatar.sleeves).toBe('long');
+            expect(f.avatar.bottom).toBe('pants');
+        }
+        const shirt = receiver.person.getObjectByName('shirtFront');
+        const white = shirt.getObjectByName('shirt').position.z;
+        const tie = shirt.getObjectByName('tie').position.z;
+        const disc = receiver.person.getObjectByName('disc').position.z;
+        expect(tie).toBeGreaterThan(white);
+        expect(disc).toBeGreaterThan(tie);
+        panel.dispose();
     });
 
     test('both of the giver\'s hands are fists, for the ribbon, and both faces are the visitor\'s', () => {
@@ -216,10 +280,12 @@ describe('The Medal', () => {
         expect(chestFront(figure(part(1.2, 0.5, {}, 'head')))).toBe(0.11);
         // Never less than the rig's depth, and that with no person at all.
         expect(chestFront({})).toBe(0.11);
-        // The figure's arms reach well forward on the giver; no deeper for it.
-        const { panel } = shot('medal', 0, 1, 1);
-        expect(chestFront(panel.figures[1])).toBeCloseTo(bareChest(), 6);
-        panel.dispose();
+        // A real figure's arms held out in front leave it no deeper.
+        const posed = createAvatar(DEFAULT_AVATAR);
+        const before = chestFront(posed);
+        posed.setPose({ right: { z: 0, x: -1.6, fore: 0, twist: 0 }, left: { z: 0, x: -1.6, fore: 0, twist: 0 } });
+        expect(chestFront(posed)).toBeCloseTo(before, 6);
+        posed.dispose();
     });
 });
 
@@ -234,10 +300,14 @@ describe('Not That Simple', () => {
         const h = onScreen(hand.getWorldPosition(new THREE.Vector3()));
         const face = onScreen(figure.head());
         const torch = onScreen(panel.box.getObjectByName('cup').getWorldPosition(new THREE.Vector3()));
-        expect(h.x).toBeGreaterThan(40);
+        expect(h.x).toBeGreaterThan(100);
         expect(h.x).toBeLessThan(face.x - 150);
         expect(torch.x).toBeGreaterThan(face.x + 150);
         expect(torch.x).toBeLessThan(1000);
+        // Up in the frame with the face, and large: the hand's own height a
+        // good share of the panel's, as the ring is the point of the picture.
+        expect(Math.abs(h.y - face.y)).toBeLessThan(150);
+        expect(h.y).toBeGreaterThan(150);
         panel.dispose();
     });
 
@@ -248,8 +318,12 @@ describe('Not That Simple', () => {
             const cloak = figure.person.getObjectByName('cloak');
             const front = bareChest({ build, ...T.templateOf('notThatSimple').cells[0].figures[0].overrides });
             expect(cloak.getObjectByName('cape').position.z).toBeLessThan(-front);
-            expect(cloak.getObjectByName('edge').position.z).toBeGreaterThan(front);
-            expect(cloak.children.filter((o) => o.name === 'fur')).toHaveLength(HALL.cloak.collar.count);
+            // The mantle is open down the front, over the shoulders.
+            const mantle = cloak.getObjectByName('mantle');
+            expect(mantle.position.y + HALL.cloak.mantle.h / 2).toBe(HALL.cloak.mantle.y);
+            expect(HALL.cloak.mantle.gap).toBeGreaterThan(0);
+            const lumps = HALL.cloak.collar.rings.reduce((n, ring) => n + ring[3], 0);
+            expect(cloak.children.filter((o) => o.name === 'fur')).toHaveLength(lumps);
             const again = panel.replaceFigure(0, { expression: 'deadpan' });
             expect(again.person.getObjectByName('cloak')).toBeTruthy();
             panel.dispose();

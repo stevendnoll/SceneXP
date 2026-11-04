@@ -258,6 +258,7 @@ export function createStage(config, {
                 panel.replaceFigure(k, {}, avatars(roleId));
                 n++;
             });
+            if (panel.redress(roleId, avatars(roleId))) n++;
         });
         if (n) dirty = true;
         return n;

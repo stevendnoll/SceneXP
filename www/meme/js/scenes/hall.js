@@ -17,23 +17,28 @@ import { chestFront } from './wear.min.js';
  * The measures, meters. The `torch` runs from `from` on the wall up and out to
  * `to` ([x, y, z off the wall]), `r` thick, an iron `cup` at its top, a flame
  * `size` tall above that, and a warm `light` a little in front of it. The
- * `cloak`, in the figure's own frame: `collar` lumps of fur round the neck on
- * an oval `rx` by `rz` at height `y`; a `cape` behind the back, its top at
- * height `y` under the collar, `top` wide there and `w` at its hem; and two
- * `edges` down the chest, `x` either side.
+ * `cloak`, in the figure's own frame: a `collar` of soft fur, `rings` of lumps
+ * ([height, across, deep, how many]) round the neck; a `mantle` over the
+ * shoulders, `top` to `hem` across and `h` tall, its top at height `y`, flattened
+ * `deep` front to back and open `gap` radians down the front; and a `cape` behind
+ * the back, `top` wide under the collar and `w` at its hem (Steve's QA,
+ * 2026-11-03: flat lumps read as rocks, and two strips down the chest as a towel).
  */
 export const HALL = Object.freeze({
     torch: Object.freeze({
-        from: Object.freeze([0.62, 1.28, 0.02]), to: Object.freeze([0.62, 1.56, 0.16]), r: 0.018, color: 0x4a3626,
+        from: Object.freeze([0.52, 1.3, 0.02]), to: Object.freeze([0.52, 1.58, 0.16]), r: 0.018, color: 0x4a3626,
         cup: Object.freeze({ r: 0.04, h: 0.06, color: 0x2a2826 }),
         flame: Object.freeze({ size: 0.26, color: 0xff9a2e, above: 0.12 }),
         light: Object.freeze({ color: 0xffb066, intensity: 1.1, distance: 2.2, ahead: 0.25 })
     }),
     cloak: Object.freeze({
-        color: 0x26312b,
-        collar: Object.freeze({ count: 18, y: 1.355, rx: 0.17, rz: 0.125, r: 0.05, color: 0x6e5c49, tip: 0x8a7760 }),
-        cape: Object.freeze({ y: 1.34, top: 0.34, w: 0.74, h: 1.1, t: 0.02, off: 0.03 }),
-        edges: Object.freeze({ x: 0.14, y: 1.32, w: 0.09, h: 0.62, t: 0.012, off: 0.006 })
+        color: 0x2c3a31,
+        collar: Object.freeze({
+            r: 0.046, color: 0x6e5c49, tip: 0x8f7c64,
+            rings: Object.freeze([Object.freeze([1.345, 0.2, 0.135, 22]), Object.freeze([1.312, 0.255, 0.165, 26])])
+        }),
+        mantle: Object.freeze({ y: 1.34, top: 0.24, hem: 0.46, h: 0.66, deep: 0.74, gap: 0.5 }),
+        cape: Object.freeze({ y: 1.34, top: 0.34, w: 0.74, h: 1.1, t: 0.02, off: 0.03 })
     })
 });
 
@@ -59,23 +64,28 @@ export function cloakOn(figure) {
     cape.name = 'cape';
     cape.position.set(0, Ca.y, -front - Ca.off - Ca.t);
     group.add(cape);
-    for (const s of [-1, 1]) {
-        const edge = new THREE.Mesh(new THREE.BoxGeometry(C.edges.w, C.edges.h, C.edges.t), cloth);
-        edge.name = 'edge';
-        edge.position.set(s * C.edges.x, C.edges.y - C.edges.h / 2, front + C.edges.off);
-        group.add(edge);
-    }
+    // The mantle: a cone of cloth over the shoulders, open down the front; a
+    // raised arm comes through it, as an arm does.
+    const Ma = C.mantle;
+    const mantle = new THREE.Mesh(new THREE.CylinderGeometry(Ma.top, Ma.hem, Ma.h, 32, 1, true, Ma.gap, Math.PI * 2 - 2 * Ma.gap), new THREE.MeshStandardMaterial({ color: C.color, roughness: 0.92, side: THREE.DoubleSide }));
+    mantle.name = 'mantle';
+    mantle.scale.z = Ma.deep;
+    mantle.position.y = Ma.y - Ma.h / 2;
+    group.add(mantle);
+    // The fur: smooth lumps, so it reads soft, in two rings of two tones.
     const F = C.collar;
-    const lump = new THREE.IcosahedronGeometry(F.r, 0);
+    const lump = new THREE.SphereGeometry(F.r, 10, 8);
     const fur = [new THREE.MeshStandardMaterial({ color: F.color, roughness: 1 }), new THREE.MeshStandardMaterial({ color: F.tip, roughness: 1 })];
-    for (let i = 0; i < F.count; i++) {
-        const a = (i / F.count) * Math.PI * 2;
-        const piece = new THREE.Mesh(lump, fur[i % 2]);
-        piece.name = 'fur';
-        piece.position.set(Math.cos(a) * F.rx, F.y + (i % 2) * 0.008, Math.sin(a) * F.rz);
-        piece.rotation.set(a, a * 2, 0);
-        group.add(piece);
-    }
+    F.rings.forEach(([y, rx, rz, count], ring) => {
+        for (let i = 0; i < count; i++) {
+            const a = ((i + ring / 2) / count) * Math.PI * 2;
+            const piece = new THREE.Mesh(lump, fur[(i + ring) % 2]);
+            piece.name = 'fur';
+            piece.position.set(Math.cos(a) * rx, y + (i % 3) * 0.006, Math.sin(a) * rz);
+            piece.scale.set(1, 0.85, 1);
+            group.add(piece);
+        }
+    });
     group.traverse((o) => {
         if (o.isMesh) o.castShadow = true;
     });

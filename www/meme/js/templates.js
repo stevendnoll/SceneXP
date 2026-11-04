@@ -360,7 +360,7 @@ const FINE_TEMPLATE = {
  *  holds both plates. The face's stands a little closer than FACE_CAMERA and
  *  a little higher, for a caption below rather than above. */
 const BUTTONS_CAMERA = { eye: [0, 1.15, 1.24], aim: [0, 1.1, -0.7], fov: 30 };
-const SWEAT_CAMERA = { eye: [0, 1.62, 1.05], aim: [0, 1.55, 0], fov: 28 };
+const SWEAT_CAMERA = { eye: [0, 1.6, 0.92], aim: [0, 1.54, 0], fov: 28 };
 const TWO_BUTTONS = {
     id: 'twoButtons',
     title: 'Two Buttons',
@@ -376,7 +376,10 @@ const TWO_BUTTONS = {
             backdrop: '#6E7B87',
             scene: 'buttons'
         },
-        { figures: [you({ expression: 'sweat' })], captions: ['bottom'], camera: SWEAT_CAMERA, backdrop: '#E7C9A0' }
+        // No hat and clear lenses, so the brow and the worried eyes are seen,
+        // and the sweat flying (Steve's QA, 2026-11-03: the face's own drops
+        // did not read, and a hat hid the brow).
+        { figures: [you({ expression: 'sweat', overrides: { hat: 'none', lensColor: 'clear' } })], captions: ['bottom'], camera: SWEAT_CAMERA, backdrop: '#E7C9A0', scene: 'sweat' }
     ]
 };
 
@@ -406,12 +409,15 @@ const SIDE_GLANCE = {
     cells: [glanceCell(-0.72), glanceCell(0)]
 };
 
-/** The Medal (template 11): one panel, the visitor twice over, one hanging a
- *  medal on the other (scenes/medal.js), on a curtained stage with no seal or
- *  flag. The receiver faces the camera, the giver stands behind on the camera's
- *  right with both hands at the ribbon behind the neck (poses.js `drape`, solved
- *  for these spots), the head turned round to show a face. A label over each
- *  head, clear of the medal, as The Handshake's clear the clasp. */
+/** The Medal (template 11): one tight panel, the visitor twice over from the
+ *  waist up, one hanging a medal on the other (scenes/medal.js), on a curtained
+ *  stage with no seal or flag. The receiver faces the camera, the giver stands
+ *  behind on the camera's right, head bowed to the work, both hands going behind
+ *  the neck (poses.js `drape`, solved for these spots). Both in a dark suit, no
+ *  hat, so the gold reads and the labels sit clear over the heads (Steve's QA,
+ *  2026-11-03: too wide a shot, a jersey fighting the medal, a headlock). */
+const SUITED_GRAY = 'x23262e';
+const SUITED = { shirt: SUITED_GRAY, sleeves: 'long', bottom: 'pants', bottomColor: SUITED_GRAY, shoeColor: 'black', legwearColor: 'black', armwearColor: SUITED_GRAY, hat: 'none' };
 const MEDAL = {
     id: 'medal',
     title: 'The Medal',
@@ -421,11 +427,11 @@ const MEDAL = {
     roles: [{ id: 'you', label: 'You', cast: 'avatar' }],
     cells: [{
         figures: [
-            { role: 'you', name: 'You, receiving', pose: 'stand', expression: 'bigGrin', nod: 0.1, at: [-0.18, 0.12], turn: 0.2, labelBelow: -0.2 },
-            { role: 'you', name: 'You, giving', pose: 'drape', expression: 'bigGrin', look: 0.45, at: [0.26, -0.1], turn: -0.85, labelBelow: -0.2 }
+            { role: 'you', name: 'You, receiving', pose: 'stand', expression: 'bigGrin', at: [-0.17, 0.1], turn: 0.2, labelBelow: -0.22, overrides: SUITED },
+            { role: 'you', name: 'You, giving', pose: 'drape', expression: 'bigGrin', look: 0.3, nod: 0.15, at: [0.24, -0.13], turn: -0.8, labelBelow: -0.22, overrides: SUITED }
         ],
         captions: [{ label: 0 }, { label: 1 }, 'bottom'],
-        camera: { eye: [0.03, 1.32, 2.9], aim: [0.03, 1.2, 0], fov: 34 },
+        camera: { eye: [0.03, 1.4, 1.88], aim: [0.03, 1.38, 0], fov: 34 },
         backdrop: '#2C3E7A',
         floor: '#34384C',
         paint: { wall: 'curtain' },
@@ -433,12 +439,12 @@ const MEDAL = {
     }]
 };
 
-/** Not That Simple (template 13): one panel, the visitor explaining a fine
- *  point with a raised hand, the finger and thumb in a ring (poses.js `ring`),
- *  in a stone hall by torchlight, in a plain cloak (scenes/hall.js). The hand
- *  is on the camera's left, against the dark of the wall, the torch on the
- *  right. Dark plain clothes under the cloak are a costume; nothing more of
- *  anyone's character is added. */
+/** Not That Simple (template 13): one tight panel, the visitor explaining a
+ *  fine point, the hand up beside the chin with the finger and thumb in a ring
+ *  (poses.js `ring`), in a dark stone hall by torchlight, in a plain cloak
+ *  (scenes/hall.js). The hand is on the camera's left, against the dark of the
+ *  wall, the torch on the right. Dark plain clothes under the cloak are a
+ *  costume; nothing more of anyone's character is added. */
 const CLOAKED = { shirt: 'x3a2e26', sleeves: 'long', bottom: 'pants', bottomColor: 'x2b2420', shoeColor: 'black', hat: 'none' };
 const NOT_THAT_SIMPLE = {
     id: 'notThatSimple',
@@ -450,9 +456,9 @@ const NOT_THAT_SIMPLE = {
     cells: [{
         figures: [{ role: 'you', pose: 'ring', side: 'right', expression: 'raisedBrow', look: 0.05, at: [0.1, 0], turn: -0.3, overrides: CLOAKED }],
         captions: ['top', 'bottom'],
-        camera: { eye: [0.03, 1.42, 1.95], aim: [0.03, 1.36, 0], fov: 34 },
-        backdrop: '#6A5F52',
-        floor: '#4A423A',
+        camera: { eye: [-0.02, 1.48, 1.6], aim: [-0.02, 1.46, 0], fov: 34 },
+        backdrop: '#54493D',
+        floor: '#3A332B',
         paint: { wall: 'stone' },
         scene: 'hall'
     }]

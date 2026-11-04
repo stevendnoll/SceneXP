@@ -109,7 +109,12 @@ export const MEME_PAGE = deepFreeze({
          *  face follows the panel's height, so the templates with the most
          *  rows drew the fewest pixels (Steve's QA, 2026-11-03: Galaxy Brain
          *  was about 9 px on a phone). */
-        tile: { size: 0.24, smallest: 0.25, maxLines: 3 }
+        tile: { size: 0.24, smallest: 0.25, maxLines: 3 },
+        /** A caption centered on a prop's small surface (Two Buttons' plates),
+         *  which is all it has: a face well up its height, down to `smallest`
+         *  of that for the longest (Steve's QA, 2026-11-03: too small for its
+         *  plate). */
+        plate: { size: 0.4, smallest: 0.35, maxLines: 3 }
     },
 
     /** A label pinned to a figure (compose.js): the face `size` as a share

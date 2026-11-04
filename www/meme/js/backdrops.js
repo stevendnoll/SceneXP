@@ -73,7 +73,7 @@ export const PAINTS = Object.freeze({
     wash: Object.freeze({ size: 256, at: Object.freeze([0.5, 0.62]), light: 0.3, dark: 0.2 }),
     // A warm gray-brown, not black (Steve, 2026-10-28: too dark).
     soot: Object.freeze({ size: 256, color: '#4A403B', line: 0.66, depth: 0.7, scale: 4, octaves: 4 }),
-    stone: Object.freeze({ size: 512, block: 0.5, row: 0.27, mortar: 0.012, jitter: 0.16, vignette: 0.42, at: Object.freeze([0.68, 0.66]), scale: 9, octaves: 3 }),
+    stone: Object.freeze({ size: 512, block: 0.5, row: 0.27, mortar: 0.012, jitter: 0.16, vignette: 0.55, at: Object.freeze([0.72, 0.66]), scale: 9, octaves: 3 }),
     curtain: Object.freeze({ size: 256, fold: 0.32, wander: 0.35, depth: 0.55, vignette: 0.3 })
 });
 

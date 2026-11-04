@@ -39,17 +39,17 @@
  *   aim       the arm straight out in front at shoulder height, a little
  *             across the body, for a thing held: the hand at
  *             (-0.14, 1.39, 0.56), the forearm level along +z
- *   ring      the hand raised beside the shoulder, the forearm up, turned so a
- *             camera the figure stands 0.3 turned from sees the thumb's side
- *             and the back of the hand about equally, which faces the ring
- *             (leaning out toward the thumb, hands-1.0.0 `RING.open`) straight
- *             at it with nothing behind the hole: the hand at
- *             (-0.35, 1.52, 0.25) (2026-11-03)
- *   drape     BOTH arms, reaching a medal's ribbon round the neck of someone
- *             standing just in front and to the figure's right, at the box
- *             spots The Medal names (`DRAPE`): the hands at (-0.14, 1.42,
- *             0.54) and (-0.05, 1.42, 0.39), either side of that neck, above
- *             its shoulders so the camera sees them (2026-11-03)
+ *   ring      the elbow low and forward, the forearm up, the palm to the camera
+ *             and the hand beside the chin, so hand and face read as one
+ *             thing, the ring (hands-1.0.0) toward the face: the hand at
+ *             (-0.28, 1.49, 0.27) (Steve's QA, 2026-11-03: the first cut's arm
+ *             stood out in an L, with the hand off on its own)
+ *   drape     BOTH arms, for hanging a ribbon from behind on someone standing
+ *             just in front and to the figure's right, at the box spots The
+ *             Medal names (`DRAPE`): one hand on the near side of that neck,
+ *             (-0.06, 1.42, 0.40), and the other behind that head, (-0.21,
+ *             1.50, 0.38), out of the camera's sight, so no arm comes round the
+ *             far side (Steve's QA, 2026-11-03: that read as a headlock)
  *
  * tests/meme-poses.test.mjs holds the hands to those regions, so a rig edit
  * that moves them is caught.
@@ -80,11 +80,11 @@ export const ARM_POSES = Object.freeze({
     shake: Object.freeze({ z: -0.06, x: -0.84, fore: -1.28, twist: 1.22 }),
     point: Object.freeze({ z: 0.87, x: -1.09, fore: -0.51, twist: 1.48 }),
     aim: Object.freeze({ z: -0.13, x: -1.76, fore: 0.07, twist: 1.14 }),
-    ring: Object.freeze({ z: 0.72, x: -1.21, fore: -1.8, twist: -1.85 }),
+    ring: Object.freeze({ z: 0.35, x: -1.13, fore: -1.9, twist: 0 }),
     // Both arms named: neither rests.
     drape: Object.freeze({
-        right: Object.freeze({ z: -0.13, x: -1.55, fore: -0.43, twist: 0 }),
-        left: Object.freeze({ z: -0.72, x: -1.14, fore: -1.13, twist: 0 })
+        right: Object.freeze({ z: -0.02, x: -1.29, fore: -1.43, twist: 0 }),
+        left: Object.freeze({ z: -0.7, x: -1.21, fore: -1.03, twist: 0 })
     }),
     lookBack: null
 });
@@ -117,8 +117,8 @@ export const HANDSHAKE = Object.freeze({ gap: 0.8, aside: 0.23, turn: 0.5 });
  *  radians: the `receiver` facing the camera, the `giver` behind it on the
  *  camera's right, turned to it. `drape` is solved for these spots. */
 export const DRAPE = Object.freeze({
-    receiver: Object.freeze({ at: Object.freeze([-0.18, 0.12]), turn: 0.2 }),
-    giver: Object.freeze({ at: Object.freeze([0.26, -0.1]), turn: -0.85 })
+    receiver: Object.freeze({ at: Object.freeze([-0.17, 0.1]), turn: 0.2 }),
+    giver: Object.freeze({ at: Object.freeze([0.24, -0.13]), turn: -0.8 })
 });
 
 /** How far the head turns for each pose, radians (a figure that turns its
