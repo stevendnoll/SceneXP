@@ -22,7 +22,7 @@
  * security policy allows, where a style attribute would not be.
  */
 
-import { listOf, optionOf, colorOf, customColor, CUSTOM_COLOR, COLOR_FIELDS, JERSEY_NAME, typedJerseyName, jerseyName } from './avatar-1.0.0.min.js';
+import { listOf, optionOf, colorOf, customColor, CUSTOM_COLOR, COLOR_FIELDS, wearsBelt, JERSEY_NAME, typedJerseyName, jerseyName } from './avatar-1.0.0.min.js';
 import { drawnOptions } from './avatar-figure-1.0.0.min.js';
 
 const deepFreeze = (o) => {
@@ -38,7 +38,8 @@ const deepFreeze = (o) => {
  * while the field it `requires` shows; a field with `hideWhen` steps aside
  * while the avatar holds that value (no beard, no beard's color), and one
  * with `showWhen` shows only while it does (a jersey's number, on the
- * jersey). A 'number' field is typed, not chosen from a row (a hundred
+ * jersey), and one with `showIf` while that test of the avatar holds (a belt's
+ * color, on clothes with a belt). A 'number' field is typed, not chosen from a row (a hundred
  * buttons would be no row), and so is a 'name' (the jersey's name, the one
  * value that is not an id; it shows whenever its `showWhen` does, since
  * there is no list to count). A tab shows only when it has a field to show.
@@ -107,6 +108,8 @@ export const EDITOR_TABS = deepFreeze([
             { key: 'numberColor', legend: 'Number color', kind: 'swatch', showWhen: { field: 'sleeves', value: 'jersey' } },
             { key: 'bottom', legend: 'Pants, skirt or shorts', kind: 'text' },
             { key: 'bottomColor', legend: 'Color', kind: 'swatch' },
+            // Only on clothes that show one: not a skirt or a one-piece.
+            { key: 'beltColor', legend: 'Belt color', kind: 'swatch', showIf: wearsBelt },
             { key: 'shoes', legend: 'Shoes', kind: 'text', frame: 'feet' },
             { key: 'shoeColor', legend: 'Shoe color', kind: 'swatch', frame: 'feet' }
         ]
@@ -367,6 +370,7 @@ export function createEditor({ doc = document, tablist, panels, tabs, avatar, on
         for (const [field, group] of groups) {
             if (field.hideWhen) group.hidden = current[field.hideWhen.field] === field.hideWhen.value;
             if (field.showWhen) group.hidden = current[field.showWhen.field] !== field.showWhen.value;
+            if (field.showIf) group.hidden = !field.showIf(current);
         }
         for (const [option, label] of onlyWith) label.hidden = !option.onlyWith.values.includes(current[option.onlyWith.field]);
     }

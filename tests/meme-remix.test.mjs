@@ -121,7 +121,7 @@ describe('round trips', () => {
         // Every color field a custom color: the longest an avatar's link gets.
         // And the longest a jersey's name travels (2026-10-28): twelve, each
         // apostrophe three characters in a link.
-        const heavy = (skin) => normalizeAvatar({ skin, eyes: 'x111111', hair: 'x222222', shirt: 'x333333', bottomColor: 'x444444', shoeColor: 'x555555', hatColor: 'x666666', hat: 'beret', lips: 'x777777', facial: 'beard', facialColor: 'x888888', glasses: 'round', frameColor: 'x999999', lensColor: 'xaaaaaa', sleeves: 'jersey', jerseyNumber: 'n00', numberColor: 'xbbbbbb', legwear: 'fishnets', legwearColor: 'xcccccc', armwear: 'fishnets', armwearColor: 'xdddddd', jerseyName: "O'O'O'O'O'O'" });
+        const heavy = (skin) => normalizeAvatar({ skin, tieColor: 'x121212', beltColor: 'x131313', eyes: 'x111111', hair: 'x222222', shirt: 'x333333', bottomColor: 'x444444', shoeColor: 'x555555', hatColor: 'x666666', hat: 'beret', lips: 'x777777', facial: 'beard', facialColor: 'x888888', glasses: 'round', frameColor: 'x999999', lensColor: 'xaaaaaa', sleeves: 'jersey', jerseyNumber: 'n00', numberColor: 'xbbbbbb', legwear: 'fishnets', legwearColor: 'xcccccc', armwear: 'fishnets', armwearColor: 'xdddddd', jerseyName: "O'O'O'O'O'O'" });
         expect(heavy('deep').jerseyName).toBe("O'O'O'O'O'O'");
         const t = TEMPLATES.find((x) => x.id === 'headTurn');
         const full = meme({ template: t.id, captions: slotsOf(t).map(() => 'W'.repeat(CONFIG.caption.maxChars)), friend: heavy('deep'), cast: { other: heavy('light') } });
@@ -132,8 +132,27 @@ describe('round trips', () => {
         const emoji = meme({ ...full, captions: slotsOf(t).map(() => '🙂'.repeat(CONFIG.caption.maxChars / 2)) });
         const trimmed = R.encodeRemix(emoji, heavy('medium'), { max: MAX });
         expect(trimmed.length).toBeLessThanOrEqual(MAX);
+        // Trimmed for real, by whole emoji (half of one cannot be encoded, and the
+        // share threw a URIError).
+        const kept = decode(trimmed).meme.captions;
+        expect(kept.join('').length).toBeLessThan(emoji.captions.join('').length);
+        for (const caption of kept) expect(caption).toMatch(/^(🙂)*$/u);
         expect(decode(trimmed).meme.cast.other).toEqual(heavy('light'));
         expect(decode(trimmed).meme.friend).toEqual(heavy('deep'));
+    });
+
+    test('a link trimmed to fit never cuts an emoji in half, whatever the ceiling (a share threw a URIError)', () => {
+        const t = TEMPLATES.find((x) => x.id === 'surprised');
+        const emoji = meme({ template: t.id, captions: slotsOf(t).map(() => '🙂👍🏽🙂👍🏽🙂') });
+        const whole = R.encodeRemix(emoji, null, { max: MAX });
+        for (let cut = 1; cut < 80; cut += 3) {
+            const max = whole.length - cut;
+            const out = R.encodeRemix(emoji, null, { max });
+            expect(out.length).toBeLessThanOrEqual(Math.max(max, R.encodeRemix(meme({ template: t.id, captions: slotsOf(t).map(() => '') }), null).length));
+            // It reads back as text with no broken half.
+            expect(decode(out)).not.toBeNull();
+            expect(decode(out).meme.captions[0]).not.toMatch(/[\uD800-\uDFFF](?![\uDC00-\uDFFF])/u);
+        }
     });
 
     test('every character of a link is one a URL carries as it is, so nothing on the way re-encodes it (Steve\'s QA, 2026-10-28)', () => {

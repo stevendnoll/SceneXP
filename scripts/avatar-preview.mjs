@@ -186,7 +186,8 @@ await sheet('shirts', [
     { sleeves: 'sweater', shirt: 'rust' }, { sleeves: 'turtleneck', shirt: 'charcoal' }, { sleeves: 'jersey', shirt: 'navy' }, { sleeves: 'jersey', shirt: 'white' },
     { sleeves: 'buttonDown', shirt: 'white' }, { sleeves: 'hoodie', shirt: 'teal' }, { sleeves: 'hoodie', shirt: 'white', build: 'curvy' },
     { sleeves: 'vneck', shirt: 'navy' }, { sleeves: 'vneck', shirt: 'white', skin: 'deep' },
-    { sleeves: 'suit', shirt: 'charcoal' }, { sleeves: 'suit', shirt: 'navy', tieColor: 'gold', build: 'round' }, { sleeves: 'suit', shirt: 'x241773', tieColor: 'pink', build: 'curvy' }
+    { sleeves: 'suit', shirt: 'charcoal' }, { sleeves: 'suit', shirt: 'navy', tieColor: 'gold', build: 'round' }, { sleeves: 'suit', shirt: 'x241773', tieColor: 'pink', build: 'curvy' },
+    { sleeves: 'short', shirt: 'white', beltColor: 'black' }, { sleeves: 'short', shirt: 'navy', beltColor: 'white', bottomColor: 'khaki' }, { sleeves: 'tank', shirt: 'teal', beltColor: 'red', bottom: 'shorts' }
 ], 'torso', [0, 0.75, Math.PI]);
 // The hood from every side (Steve's QA, 2026-10-25: the old half ball
 // "looks like half of an oval, missing the other half").

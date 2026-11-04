@@ -1019,8 +1019,9 @@ export function dressBottom(person, style, color, skin = null) {
             leg.add(stripe);
         }
     }
-    if (style === 'sweatpants' || style === 'leggings') {
-        // A waistband over the belt line, with a drawstring on sweatpants.
+    if (style === 'sweatpants' || style === 'leggings' || style === 'basketballShorts') {
+        // A waistband where another bottom's belt would be, these three having
+        // none (Steve, 2026-11-05), with a drawstring on sweatpants.
         const { torso } = bodyParts(person);
         if (!torso) return;
         const { width, height, depth } = torsoBox(torso);

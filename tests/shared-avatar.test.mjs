@@ -78,7 +78,7 @@ describe('the lists', () => {
         expect(FIELD_KEYS).toEqual(['skin', 'eyes', 'hair', 'length', 'facial', 'glasses', 'build', 'shirt',
             'sleeves', 'bottom', 'bottomColor', 'shoes', 'shoeColor', 'hat', 'hatColor', 'mouth', 'lips', 'muscles',
             'facialColor', 'brows', 'eyeShape', 'nose', 'faceShape', 'cheeks', 'frameColor', 'lensColor', 'handSize', 'footSize',
-            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor', 'handedness', 'jerseyName', 'tieColor']);
+            'jerseyNumber', 'numberColor', 'legwear', 'legwearColor', 'armwear', 'armwearColor', 'handedness', 'jerseyName', 'tieColor', 'beltColor']);
         for (const [key, list] of A.FIELDS) {
             const ids = list.map((o) => o.id);
             expect(`${key}: ${new Set(ids).size}`).toBe(`${key}: ${ids.length}`);
@@ -195,7 +195,7 @@ describe('normalizeAvatar takes anything', () => {
             mouth: 'smile', lips: 'natural', muscles: 'standard',
             facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
             frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
-            handedness: 'right', jerseyName: 'none', tieColor: 'darkRed'
+            handedness: 'right', jerseyName: 'none', tieColor: 'darkRed', beltColor: 'darkBrown'
         });
         // No free text survives, whatever it was called: the one typed field
         // (the jersey's name, 2026-10-28) keeps only a name it can be.
@@ -624,7 +624,7 @@ describe('the link', () => {
     test('the default\'s link is pinned, so the field order can never move under a link already sent', () => {
         expect(A.encodeLink(A.DEFAULT_AVATAR))
             .toBe('a=1.fair.darkBrown.darkBrown.short.none.none.straight.rust.long.pants.navy.classic.black.none.navy.smile.natural.standard'
-                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black.right.none.darkRed');
+                + '.match.natural.round.pointed.round.none.standard.standard.standard.standard.none.standard.none.black.none.black.right.none.darkRed.darkBrown');
         // A link made before the mouth and the muscles (2026-10-23) still
         // opens, its new fields at their defaults.
         expect(A.decodeLink('#a=1.deep.blue.gray.long.beard.round.curvy.teal.short.skirt.khaki.maryJane.red.cap.mustard'))
@@ -633,7 +633,7 @@ describe('the link', () => {
                 hatColor: 'mustard', mouth: 'smile', lips: 'natural', muscles: 'standard',
                 facialColor: 'match', brows: 'natural', eyeShape: 'round', nose: 'pointed', faceShape: 'round', cheeks: 'none',
                 frameColor: 'standard', lensColor: 'standard', handSize: 'standard', footSize: 'standard', jerseyNumber: 'none', numberColor: 'standard', legwear: 'none', legwearColor: 'black', armwear: 'none', armwearColor: 'black',
-                handedness: 'right', jerseyName: 'none', tieColor: 'darkRed' });
+                handedness: 'right', jerseyName: 'none', tieColor: 'darkRed', beltColor: 'darkBrown' });
         expect(A.linkUrl(A.DEFAULT_AVATAR, 'https://www.scenexp.com/'))
             .toBe(`https://www.scenexp.com/avatar/#${A.encodeLink(A.DEFAULT_AVATAR)}`);
         expect(A.linkUrl(null, '')).toBe(`/avatar/#${A.encodeLink(null)}`);
@@ -680,7 +680,8 @@ describe('the file', () => {
             const data = JSON.parse(text);
             expect(Object.keys(data)).toEqual(['scenexp', 'v', 'avatar']);
             expect(Object.keys(data.avatar)).toEqual(FIELD_KEYS);
-            expect(text.length).toBeLessThan(A.MAX_FILE / 4);
+            // Well under the ceiling, with room for fields yet to come.
+            expect(text.length).toBeLessThan(A.MAX_FILE / 3);
         }
         expect(A.FILE_NAME).toBe('scenexp-avatar.json');
     });
@@ -943,14 +944,16 @@ describe('the suit and its tie (Steve, 2026-11-03)', () => {
     });
 
     test('an avatar saved or linked before there was a tie keeps everything, with the default tie', () => {
-        // Appended last, so a link made before reads every field where it was.
-        expect(A.FIELDS[A.FIELDS.length - 1][0]).toBe('tieColor');
+        // Appended after those before it, so a link made before reads every
+        // field where it was.
+        const keys = A.FIELDS.map(([key]) => key);
+        expect(keys.indexOf('tieColor')).toBe(keys.indexOf('jerseyName') + 1);
         const dressed = A.normalizeAvatar({ sleeves: 'jersey', shirt: 'teal', jerseyNumber: 'n8', jerseyName: 'SMITH' });
         const old = { ...dressed };
         delete old.tieColor;
         expect(A.normalizeAvatar(old)).toEqual(dressed);
         const parts = A.encodeLink(dressed).split('.');
-        expect(A.decodeLink(parts.slice(0, -1).join('.'))).toEqual(dressed);
+        expect(A.decodeLink(parts.slice(0, -2).join('.'))).toEqual(dressed);
     });
 
     test('a suit and its chosen tie travel in the link, and the sentence says them, and only on a suit', () => {
@@ -974,6 +977,63 @@ describe('the suit and its tie (Steve, 2026-11-03)', () => {
             }
             expect(`${look}: ${seen.has('suit')}`).toBe(`${look}: true`);
         }
+    });
+});
+
+describe('the belt\'s color (Steve, 2026-11-05)', () => {
+    test('the rig\'s own dark brown unless chosen, any list or custom color, and it reaches the rig', () => {
+        expect(A.DEFAULT_AVATAR.beltColor).toBe('darkBrown');
+        expect(A.personConfig({}).beltColor).toBe(0x2c1810);
+        expect(A.personConfig({ beltColor: 'white' }).beltColor).toBe(A.colorOf('beltColor', 'white'));
+        expect(A.personConfig({}).hasBelt).toBe(true);
+        expect(A.personConfig({ bottom: 'leggings' }).hasBelt).toBe(false);
+        expect(A.personConfig({}, { bottom: 'basketballShorts' }).hasBelt).toBe(false);
+        expect(A.normalizeAvatar({ beltColor: 'x241773' }).beltColor).toBe('x241773');
+        expect(A.personConfig({ beltColor: 'x241773' }).beltColor).toBe(0x241773);
+        expect(A.normalizeAvatar({ beltColor: 'plaid' }).beltColor).toBe('darkBrown');
+        const colors = A.BELT_COLORS.map((o) => o.color);
+        expect(colors.every((c) => Number.isInteger(c))).toBe(true);
+        expect(new Set(colors).size).toBe(colors.length);
+    });
+
+    test('an avatar saved or linked before there was a belt color keeps everything, in the belt it had', () => {
+        expect(A.FIELDS[A.FIELDS.length - 1][0]).toBe('beltColor');
+        const dressed = A.normalizeAvatar({ sleeves: 'suit', tieColor: 'gold', shirt: 'teal' });
+        const old = { ...dressed };
+        delete old.beltColor;
+        expect(A.normalizeAvatar(old)).toEqual(dressed);
+        const parts = A.encodeLink(dressed).split('.');
+        expect(A.decodeLink(parts.slice(0, -1).join('.'))).toEqual(dressed);
+        const belted = A.normalizeAvatar({ beltColor: 'tan' });
+        expect(A.decodeLink(A.encodeLink(belted))).toEqual(belted);
+    });
+
+    test('a belt is worn with all but a skirt, the waistbanded three and a one-piece; bare legs with no one-piece are worn as shorts, belted', () => {
+        // Named here and not read from the list: skirts, and the three that wear a
+        // waistband instead (Steve, 2026-11-05).
+        const beltless = ['skirt', 'longSkirt', 'miniSkirt', 'pleatedSkirt', 'tutu', 'sweatpants', 'leggings', 'basketballShorts'];
+        for (const { id } of A.BOTTOMS) {
+            if (id === 'bare') continue;
+            expect(`${id}: ${A.wearsBelt(A.normalizeAvatar({ bottom: id }))}`).toBe(`${id}: ${!beltless.includes(id)}`);
+        }
+        for (const { id, onePiece } of A.SLEEVES) {
+            expect(`${id}: ${A.wearsBelt(A.normalizeAvatar({ sleeves: id }))}`).toBe(`${id}: ${!onePiece}`);
+        }
+        expect(A.wearsBelt(A.normalizeAvatar({ bottom: 'bare' }))).toBe(true);
+        expect(A.wearsBelt(A.normalizeAvatar({ bottom: 'bare', sleeves: 'leotard' }))).toBe(false);
+        // An avatar only part filled in, as the editor can hold, wears the defaults.
+        expect(A.wearsBelt({ skin: 'fair' })).toBe(true);
+        expect(A.wearsBelt({ bottom: 'skirt' })).toBe(false);
+        expect(A.wearsBelt(null)).toBe(true);
+    });
+
+    test('the sentence says a chosen belt, and nothing of the usual or of one not worn', () => {
+        expect(A.describeAvatar({ beltColor: 'black' })).toMatch(/a black belt/);
+        expect(A.describeAvatar({ beltColor: 'x123456' })).toMatch(/a custom-color belt/);
+        expect(A.describeAvatar({})).not.toMatch(/belt/);
+        expect(A.describeAvatar({ beltColor: 'black', bottom: 'skirt' })).not.toMatch(/belt/);
+        expect(A.describeAvatar({ beltColor: 'black', sleeves: 'bodysuit' })).not.toMatch(/belt/);
+        expect(A.describeAvatar({ beltColor: 'black', bottom: 'sweatpants' })).not.toMatch(/belt/);
     });
 });
 
@@ -1017,7 +1077,7 @@ describe('the name on the jersey\'s back (Steve\'s son, 2026-10-28)', () => {
     test('a link carries the name in characters a URL keeps as they are, and reads it back; an older link has none', () => {
         const a = A.normalizeAvatar({ sleeves: 'jersey', jerseyNumber: 'n8', jerseyName: "O'NEIL VAN" });
         const link = A.encodeLink(a);
-        expect(link.endsWith(".O%27NEIL_VAN.darkRed")).toBe(true);
+        expect(link.endsWith(".O%27NEIL_VAN.darkRed.darkBrown")).toBe(true);
         expect(link).toMatch(/^[A-Za-z0-9\-._~!$&()*+,;=:@/?%]*$/);
         expect(link).not.toMatch(/[ ']/);
         expect(A.decodeLink(link)).toEqual(a);

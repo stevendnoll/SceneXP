@@ -172,6 +172,66 @@ describe('the shirts', () => {
         expect(named(shirt.person, 'collar').length).toBe(2);
     });
 
+    test('the belt wears its chosen color and the buckle stays silver; the rig\'s other people keep the belt they had (Steve, 2026-11-05)', async () => {
+        const beltOf = (person) => person.children.filter((m) => m.isMesh && !m.name && m.geometry.type === 'BoxGeometry' && m.position.y < 1 && m.position.y > 0.6);
+        const parts = (person) => {
+            const boxes = beltOf(person);
+            return { belt: boxes.find((m) => m.geometry.parameters.width > 0.2), buckle: boxes.find((m) => m.geometry.parameters.width < 0.1) };
+        };
+        const hex = (m) => m.material.color.getHex();
+        const as = (color) => new THREE.Color(color).getHex();
+        const black = F.createAvatar({ beltColor: 'black' });
+        expect(hex(parts(black.person).belt)).toBe(as(A.colorOf('beltColor', 'black')));
+        expect(hex(parts(black.person).buckle)).toBe(as(0xc0c0c0));
+        const custom = F.createAvatar({ beltColor: 'x123456' });
+        expect(hex(parts(custom.person).belt)).toBe(as(0x123456));
+        const usual = F.createAvatar({});
+        expect(hex(parts(usual.person).belt)).toBe(as(0x2c1810));
+        // A released scene's person, built straight from the rig, names no belt.
+        const { createPerson } = await import('../www/shared/js/people-1.0.0.min.js');
+        expect(hex(parts(createPerson({})).belt)).toBe(as(0x2c1810));
+        // Whatever color it wears, it stays where it was: no belt under a skirt.
+        expect(parts(F.createAvatar({ beltColor: 'black', bottom: 'skirt' }).person).belt).toBeUndefined();
+        for (const a of [black, custom, usual]) a.dispose();
+    });
+
+    test('sweatpants, leggings and basketball shorts wear a waistband and no belt or buckle, on every build, with no gap at the waist (Steve, 2026-11-05)', async () => {
+        const beltBoxes = (person) => person.children.filter((m) => m.isMesh && !m.name && m.geometry.type === 'BoxGeometry' && m.position.y < 1 && m.position.y > 0.6);
+        const caster = new THREE.Raycaster();
+        for (const bottom of ['sweatpants', 'leggings', 'basketballShorts']) {
+            for (const { id: build } of A.BUILDS) {
+                const avatar = F.createAvatar({ bottom, build, beltColor: 'red' });
+                const person = avatar.person;
+                avatar.group.updateMatrixWorld(true);
+                expect(`${bottom} ${build} belt pieces: ${beltBoxes(person).length}`).toBe(`${bottom} ${build} belt pieces: 0`);
+                const bands = named(person, 'waistband');
+                expect(`${bottom} ${build} waistbands: ${bands.length}`).toBe(`${bottom} ${build} waistbands: 1`);
+                // Across the seam between shirt and legs, front and back, the
+                // first thing met is the band, so no seam or hole shows. The
+                // figure stands on its soles, off the ground.
+                const seam = bands[0].position.y + person.position.y;
+                for (const dir of [1, -1]) {
+                    for (const x of [-0.12, -0.05, 0, 0.05, 0.12]) {
+                        caster.set(new THREE.Vector3(x, seam, 2 * dir), new THREE.Vector3(0, 0, -dir));
+                        const hit = caster.intersectObject(person, true).find((h) => h.object.visible);
+                        expect(`${bottom} ${build} at ${x}: ${hit.object.name}`).toBe(`${bottom} ${build} at ${x}: waistband`);
+                    }
+                }
+                avatar.dispose();
+            }
+        }
+        // Every other trouser and short keeps its belt and buckle, and a person
+        // built straight from the rig does, unless it asks for none.
+        for (const bottom of ['pants', 'shorts', 'cargoPants', 'cargoShorts', 'capris', 'shortShorts']) {
+            const avatar = F.createAvatar({ bottom });
+            expect(`${bottom}: ${beltBoxes(avatar.person).length}`).toBe(`${bottom}: 2`);
+            avatar.dispose();
+        }
+        const { createPerson } = await import('../www/shared/js/people-1.0.0.min.js');
+        expect(beltBoxes(createPerson({}))).toHaveLength(2);
+        expect(beltBoxes(createPerson({ hasBelt: false }))).toHaveLength(0);
+    });
+
     test('the suit: a shirt V, lapels, a collar, a tie in its own color, buttons and white cuffs, the rig\'s round collar gone (Steve, 2026-11-03)', () => {
         const avatar = F.createAvatar({ sleeves: 'suit', shirt: 'navy', tieColor: 'gold' });
         const person = avatar.person;

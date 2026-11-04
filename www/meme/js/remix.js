@@ -108,7 +108,9 @@ export function encodeRemix(meme, avatar = null, { max = 2000, templates = null 
         let k = -1;
         captions.forEach((c, i) => { if (c.length && (k < 0 || c.length > captions[k].length)) k = i; });
         if (k < 0) break;
-        captions[k] = captions[k].slice(0, -1);
+        // A whole character at a time: half of an emoji cannot be encoded, and
+        // a share must never fail for a long line.
+        captions[k] = Array.from(captions[k]).slice(0, -1).join('');
         out = build();
     }
     return out;

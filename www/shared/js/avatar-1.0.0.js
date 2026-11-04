@@ -108,7 +108,7 @@ export const HAIR_COLORS = Object.freeze([
 export const CUSTOM_COLOR = /^x[0-9a-f]{6}$/;
 
 /** The fields that take a custom color as well as their swatches. */
-export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor', 'frameColor', 'lensColor', 'numberColor', 'legwearColor', 'armwearColor', 'tieColor']);
+export const COLOR_FIELDS = Object.freeze(['skin', 'eyes', 'hair', 'shirt', 'bottomColor', 'shoeColor', 'hatColor', 'lips', 'facialColor', 'frameColor', 'lensColor', 'numberColor', 'legwearColor', 'armwearColor', 'tieColor', 'beltColor']);
 
 /** A custom color's id for a display hex (0x9c2b25 is "x9c2b25"). */
 export function customColor(hex) {
@@ -249,6 +249,19 @@ export const TIE_COLORS = Object.freeze([
     { id: 'green', label: 'Green', color: 0x2f7a4f },
     { id: 'purple', label: 'Purple', color: 0x5b3a8c },
     { id: 'pink', label: 'Pink', color: 0xd9779a }
+]);
+
+/** The belt's color (Steve, 2026-11-05), the rig's own dark brown unless chosen. */
+export const BELT_COLORS = Object.freeze([
+    { id: 'darkBrown', label: 'Dark brown', color: 0x2c1810 },
+    { id: 'brown', label: 'Brown', color: 0x6b4423 },
+    { id: 'tan', label: 'Tan', color: 0xb08a5a },
+    { id: 'black', label: 'Black', color: 0x16161a },
+    { id: 'gray', label: 'Gray', color: 0x6f7276 },
+    { id: 'white', label: 'White', color: 0xf2f0ea },
+    { id: 'navy', label: 'Navy', color: 0x1f2f55 },
+    { id: 'red', label: 'Red', color: 0xb0282a },
+    { id: 'green', label: 'Green', color: 0x2f7a4f }
 ]);
 
 /**
@@ -441,9 +454,10 @@ export const BOTTOMS = Object.freeze([
     { id: 'shorts', label: 'Shorts', kind: 'shorts' },
     { id: 'cargoPants', label: 'Cargo pants', kind: 'pants' },
     { id: 'cargoShorts', label: 'Cargo shorts', kind: 'shorts' },
-    { id: 'sweatpants', label: 'Sweatpants', kind: 'pants' },
-    { id: 'leggings', label: 'Leggings', kind: 'pants' },
-    { id: 'basketballShorts', label: 'Basketball shorts', kind: 'shorts' },
+    // No belt on these three, each with a waistband of its own (Steve, 2026-11-05).
+    { id: 'sweatpants', label: 'Sweatpants', kind: 'pants', noBelt: true },
+    { id: 'leggings', label: 'Leggings', kind: 'pants', noBelt: true },
+    { id: 'basketballShorts', label: 'Basketball shorts', kind: 'shorts', noBelt: true },
     { id: 'longSkirt', label: 'Long skirt', kind: 'skirt' },
     // Appended 2026-10-26 (Steve's QA: "short shorts and short mini
     // skirts", a ballerina's tutu, capris so legwear shows under pants), and
@@ -456,6 +470,15 @@ export const BOTTOMS = Object.freeze([
     { id: 'capris', label: 'Capri pants', kind: 'capris' },
     { id: 'bare', label: 'Bare legs', kind: 'bare', onlyWith: { field: 'sleeves', values: ['leotard', 'bodysuit'] } }
 ]);
+
+/** Whether `avatar` shows a belt: all but a skirt, which the rig draws in its
+ *  place, a bottom with a waistband instead (`noBelt`), and a one-piece, whose
+ *  brief hides it (avatar-layers). */
+export function wearsBelt(avatar) {
+    const a = normalizeAvatar(avatar);
+    const bottom = optionOf(BOTTOMS, wornBottom(a));
+    return bottom.kind !== 'skirt' && !bottom.noBelt && !optionOf(SLEEVES, a.sleeves).onePiece;
+}
 
 /** The bottom an avatar is drawn in: its own, unless it is bare legs with
  *  no one-piece over them, which is worn as shorts. */
@@ -613,7 +636,9 @@ export const FIELDS = Object.freeze([
     // Appended 2026-10-28 (Steve's son): the name on the jersey's back.
     Object.freeze(['jerseyName', JERSEY_NAMES]),
     // Appended 2026-11-03 (Steve): the suit's tie.
-    Object.freeze(['tieColor', TIE_COLORS])
+    Object.freeze(['tieColor', TIE_COLORS]),
+    // Appended 2026-11-05 (Steve): the belt.
+    Object.freeze(['beltColor', BELT_COLORS])
 ]);
 
 /** The list a field's ids come from, or null for a field that is not one. */
@@ -663,7 +688,8 @@ export const DEFAULT_AVATAR = Object.freeze({
     armwearColor: 'black',
     handedness: 'right',
     jerseyName: 'none',
-    tieColor: 'darkRed'
+    tieColor: 'darkRed',
+    beltColor: 'darkBrown'
 });
 
 const own = (o, key) => Object.prototype.hasOwnProperty.call(o, key);
@@ -887,6 +913,8 @@ export function personConfig(avatar, overrides = {}) {
         sleeveColor: sleeves.long ? shirt : null,
         dressShirt: !!sleeves.dressShirt,
         pantsColor: colorOf('bottomColor', a.bottomColor),
+        hasBelt: !optionOf(BOTTOMS, wornBottom(a)).noBelt,
+        beltColor: colorOf('beltColor', a.beltColor),
         hasSkirt: optionOf(BOTTOMS, wornBottom(a)).kind === 'skirt',
         muscular: a.muscles === 'buff',
         footScale: optionOf(MUSCLES, a.muscles).feet * optionOf(FOOT_SIZES, a.footSize).scale,
@@ -996,6 +1024,8 @@ export function describeAvatar(avatar) {
         (sleeves.said ? `a ${shirt} ${sleeves.said}` : a.sleeves === 'tank' ? `a ${shirt} tank top` : `a ${shirt} shirt with ${a.sleeves} sleeves`) + numbered + (a.sleeves === 'suit' ? ` with ${an(word(TIE_COLORS, a.tieColor))} tie` : ''),
         bottom.kind === 'bare' ? 'bare legs' : `${bottom.kind === 'skirt' ? 'a ' : ''}${name(PANTS, a.bottomColor)} ${bottom.label.toLowerCase()}`
     ];
+    // "a black belt" (nothing said of the usual, 2026-11-05).
+    if (wearsBelt(a) && a.beltColor !== 'darkBrown') clothes.push(`${an(word(BELT_COLORS, a.beltColor))} belt`);
     // The underlayer (2026-10-26): "black fishnets and black fishnet sleeves".
     if (a.legwear !== 'none') clothes.push(`${word(LAYER_COLORS, a.legwearColor)} ${word(LEGWEAR, a.legwear)}`);
     if (a.armwear !== 'none') clothes.push(`${word(LAYER_COLORS, a.armwearColor)} ${word(ARMWEAR, a.armwear)}`);
