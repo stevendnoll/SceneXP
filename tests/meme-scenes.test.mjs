@@ -26,6 +26,7 @@ let chestFront;
 let slotLabel;
 let createAvatar;
 let colorOf;
+let W;
 
 beforeAll(async () => {
     THREE = await loadRealThree();
@@ -42,6 +43,7 @@ beforeAll(async () => {
     ({ chestFront } = await import('../www/meme/js/scenes/wear.js'));
     ({ slotLabel } = await import('../www/meme/js/editor.js'));
     ({ createAvatar } = await import('../www/shared/js/avatar-figure-1.0.0.min.js'));
+    W = await import('../www/shared/js/avatar-wardrobe-1.0.0.min.js');
 });
 afterAll(() => {
     delete globalThis.THREE;
@@ -385,23 +387,114 @@ describe('Not That Simple', () => {
         panel.dispose();
     });
 
-    test('a cloak on any build, a cape behind and edges before, and on the figure built again', () => {
+    test('a cloak on any build, a cape behind and a mantle over the shoulders, and on the figure built again', () => {
         for (const build of ['slim', 'round']) {
             const { panel } = shot('notThatSimple', 0, 1, 1, { build });
             const figure = panel.figures[0];
             const cloak = figure.person.getObjectByName('cloak');
             const front = bareChest({ build, ...T.templateOf('notThatSimple').cells[0].figures[0].overrides });
             expect(cloak.getObjectByName('cape').position.z).toBeLessThan(-front);
-            // The mantle is open down the front, over the shoulders.
-            const mantle = cloak.getObjectByName('mantle');
-            expect(mantle.position.y + HALL.cloak.mantle.h / 2).toBe(HALL.cloak.mantle.y);
-            expect(HALL.cloak.mantle.gap).toBeGreaterThan(0);
-            const lumps = HALL.cloak.collar.rings.reduce((n, ring) => n + ring[3], 0);
-            expect(cloak.children.filter((o) => o.name === 'fur')).toHaveLength(lumps);
             const again = panel.replaceFigure(0, { expression: 'deadpan' });
             expect(again.person.getObjectByName('cloak')).toBeTruthy();
             panel.dispose();
         }
+    });
+
+    describe('nothing goes round the neck (Steve\'s QA, 2026-11-04)', () => {
+        const pointsOf = (mesh) => {
+            const pos = mesh.geometry.attributes.position;
+            return Array.from({ length: pos.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(pos, i));
+        };
+
+        test('no ring of anything: the cloak is its mantle, its cape and the open collar', () => {
+            const { panel } = shot('notThatSimple', 0, 1, 1);
+            const names = panel.figures[0].person.getObjectByName('cloak').children.map((o) => o.name).sort();
+            expect(names).toEqual(['cape', 'collarFlap', 'collarFlap', 'mantle', 'throat']);
+            panel.dispose();
+        });
+
+        test('the mantle never touches the neck, and its opening is widest there, on every build', () => {
+            const R = 0.05;
+            for (const build of ['straight', 'slim', 'curvy', 'broad', 'round', 'full']) {
+                const { panel } = shot('notThatSimple', 0, 1, 1, { build });
+                const pts = pointsOf(panel.figures[0].person.getObjectByName('mantle'));
+                for (const v of pts) {
+                    // The neck runs from the torso's top, 1.30, to the head, 1.38.
+                    if (v.y > 1.3 && v.y < 1.4) expect(`${build} clear of the neck: ${Math.hypot(v.x, v.z) > R + 0.01}`).toBe(`${build} clear of the neck: true`);
+                    // Nothing of it crosses in front of the throat.
+                    if (v.y > 1.3) expect(`${build} open at the throat: ${!(v.z > 0 && Math.abs(v.x) < R + 0.01)}`).toBe(`${build} open at the throat: true`);
+                }
+                panel.dispose();
+            }
+        });
+
+        test('the skin runs unbroken from inside the neck over the torso to a V on the chest, on every build, facing out', () => {
+            for (const build of ['straight', 'slim', 'curvy', 'broad', 'round', 'full']) {
+                const { panel } = shot('notThatSimple', 0, 1, 1, { build });
+                const person = panel.figures[0].person;
+                const throat = person.getObjectByName('throat');
+                const pts = pointsOf(throat);
+                // Its back edge is inside the neck, so no shirt shows between them.
+                const back = pts.reduce((a, v) => Math.min(a, v.z), Infinity);
+                expect(`${build} back in the neck: ${back < 0.05}`).toBe(`${build} back in the neck: true`);
+                // Its point is well down the chest, on the chest's front.
+                const tip = pts.reduce((a, v) => (v.y < a.y ? v : a), pts[0]);
+                const { torso } = W.bodyParts(person);
+                const { height, depth } = W.torsoBox(torso);
+                const top = torso.position.y + height / 2;
+                expect(tip.y).toBeLessThan(top - 0.1);
+                expect(tip.z - depth / 2).toBeGreaterThan(0);
+                expect(tip.z - depth / 2).toBeLessThan(0.006);
+                // Never above the neck's base by more than a hair, or sticking up.
+                expect(Math.max(...pts.map((v) => v.y))).toBeLessThan(top + 0.006);
+                // Every face looks up or out: from the camera it is skin, not a hole.
+                const nor = throat.geometry.attributes.normal;
+                for (let i = 0; i < nor.count; i++) expect(nor.getY(i) + nor.getZ(i)).toBeGreaterThan(0.5);
+                // In the figure's own skin, and the rig's round collar gone.
+                let skin = null;
+                person.traverse((o) => { if (!skin && o.userData.isHead) skin = o.material; });
+                expect(throat.material).toBe(skin);
+                expect(W.bodyParts(person).collar.visible).toBe(false);
+                panel.dispose();
+            }
+        });
+
+        test('from the picture\'s own camera, the middle of the chest is skin all the way from the neck to the V: no band of shirt across it, on every build', () => {
+            for (const build of ['straight', 'slim', 'curvy', 'broad', 'round', 'full']) {
+                const { panel, camera } = shot('notThatSimple', 0, 1000, 1000, { build, facial: 'none', glasses: 'none' });
+                const person = panel.figures[0].person;
+                const { torso } = W.bodyParts(person);
+                const { height, depth } = W.torsoBox(torso);
+                const top = torso.position.y + height / 2;
+                let skin = null;
+                person.traverse((o) => { if (!skin && o.userData.isHead) skin = o.material; });
+                person.updateMatrixWorld(true);
+                const caster = new THREE.Raycaster();
+                // Down the figure's middle line, from the neck's front to the V.
+                for (let y = top + 0.03; y > top - 0.09; y -= 0.004) {
+                    const z = y > top ? 0.05 : depth / 2;
+                    const target = person.localToWorld(new THREE.Vector3(0, y, z));
+                    caster.set(camera.position, target.clone().sub(camera.position).normalize());
+                    const hit = caster.intersectObject(person, true).find((h) => h.object.visible);
+                    expect(`${build} at ${(y - top).toFixed(3)}: ${hit.object.material.color.getHex() === skin.color.getHex()}`).toBe(`${build} at ${(y - top).toFixed(3)}: true`);
+                }
+                panel.dispose();
+            }
+        });
+
+        test('a flap of cloth down each side of the V, standing just over the skin, on the figure built again too', () => {
+            const { panel } = shot('notThatSimple', 0, 1, 1);
+            const flaps = panel.figures[0].person.getObjectByName('cloak').children.filter((o) => o.name === 'collarFlap');
+            expect(flaps).toHaveLength(2);
+            const skinFront = pointsOf(panel.figures[0].person.getObjectByName('throat')).reduce((a, v) => Math.max(a, v.z), -Infinity);
+            const xs = flaps.map((f) => pointsOf(f).reduce((a, v) => a + v.x, 0));
+            expect(Math.sign(xs[0])).toBe(-Math.sign(xs[1]));
+            for (const f of flaps) expect(pointsOf(f).reduce((a, v) => Math.max(a, v.z), -Infinity)).toBeGreaterThan(skinFront);
+            const again = panel.replaceFigure(0, { expression: 'deadpan' });
+            expect(again.person.getObjectByName('cloak').children.filter((o) => o.name === 'throat')).toHaveLength(1);
+            expect(again.avatar.sleeves).toBe('long');
+            panel.dispose();
+        });
     });
 
     test('the flame and its light move when ticked, and the costume is the meme\'s', () => {
