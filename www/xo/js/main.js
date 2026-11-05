@@ -3052,7 +3052,9 @@ async function init() {
     cleanup = new AbortController();
     const { signal } = cleanup;
     installCardFocusTrap({ signal });
-    installCardScrollReset({ signal });
+    // `watchParent` BECAUSE THIS PAGE HIDES THE OVERLAY AROUND EACH DIALOG, not the
+    // dialog itself, and without it the reset never fires here.
+    installCardScrollReset({ signal, watchParent: true });
     // A, B, C, D throw, Q, S or the space bar snaps, K keeps it. They press the
     // buttons that are on screen rather than calling the game, so they can
     // never offer something the visitor cannot see (see hud.js).

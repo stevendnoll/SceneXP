@@ -63,6 +63,30 @@ describe.each(sources)('%s', (file) => {
   });
 });
 
+/** Every experience folder's page and main module. */
+async function everyScene() {
+  const { readFile, readdir } = await import('node:fs/promises');
+  const root = new URL('../www/', import.meta.url);
+  const names = (await readdir(root, { withFileTypes: true }))
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .filter((n) => !['assets', 'css', 'js', 'lib', 'shared', 'snaps'].includes(n));
+
+  const scenes = [];
+  for (const scene of names) {
+    try {
+      scenes.push({
+        scene,
+        html: await readFile(new URL(`${scene}/index.html`, root), 'utf8'),
+        main: await readFile(new URL(`${scene}/js/main.js`, root), 'utf8'),
+      });
+    } catch (e) {
+      // not an experience folder
+    }
+  }
+  return scenes;
+}
+
 test('every scene with cards resets their scroll when they open', async () => {
   /* REPORTED FROM QA, and it was twelve of the fourteen scenes: a card closed
    * halfway down came back halfway down. The fix is one shared call per
@@ -71,26 +95,29 @@ test('every scene with cards resets their scroll when they open', async () => {
    * scroll, on a viewport short enough to make it. So the pairing is asserted
    * here rather than trusted: a page that declares a dialog has to install
    * the reset. */
-  const { readFile, readdir } = await import('node:fs/promises');
-  const root = new URL('../www/', import.meta.url);
-  const scenes = (await readdir(root, { withFileTypes: true }))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name)
-    .filter((n) => !['assets', 'css', 'js', 'lib', 'shared', 'snaps'].includes(n));
-
-  for (const scene of scenes) {
-    let html;
-    let main;
-    try {
-      html = await readFile(new URL(`${scene}/index.html`, root), 'utf8');
-      main = await readFile(new URL(`${scene}/js/main.js`, root), 'utf8');
-    } catch (e) {
-      continue;   // not an experience folder
-    }
+  for (const { scene, html, main } of await everyScene()) {
     const cards = (html.match(/role="dialog" aria-modal="true"/g) || []).length;
-    const installs = main.includes('installCardScrollReset({ signal })');
+    const installs = /installCardScrollReset\(\{ signal(, watchParent: true)? \}\)/.test(main);
     // Named both ways round so a failure says which scene and which half.
     expect(`${scene}: ${cards} card(s), reset installed: ${installs}`)
       .toBe(`${scene}: ${cards} card(s), reset installed: ${cards > 0}`);
+  }
+});
+
+test('a scene that hides the overlay around its cards has the reset watch it', async () => {
+  /* THE PAIRING ABOVE STAYED GREEN WHILE THE RESET DID NOTHING. On a page that
+   * hides the overlay around each dialog, nothing on the dialog ever changes,
+   * so the observer installed, reported its count and never fired.
+   *
+   * UNDECIDED: office and whitestone have the same shape and the same missing
+   * reset, left alone until somebody has checked those scenes by eye. When one
+   * adopts `watchParent`, this fails until it comes off the list. */
+  const undecided = ['office', 'whitestone'];
+  for (const { scene, html, main } of await everyScene()) {
+    const page = html.replace(/<!--[\s\S]*?-->/g, '');
+    const overlaid = /<div\b[^>]*\shidden\b[^>]*>\s*<\w+\b[^>]*role="dialog"/.test(page);
+    const watches = main.includes('installCardScrollReset({ signal, watchParent: true })');
+    expect(`${scene}: overlay hidden: ${overlaid}, reset watches it: ${watches}`)
+      .toBe(`${scene}: overlay hidden: ${overlaid}, reset watches it: ${overlaid && !undecided.includes(scene)}`);
   }
 });

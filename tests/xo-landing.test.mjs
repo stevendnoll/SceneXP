@@ -206,4 +206,52 @@ describe('the rules', () => {
         expect(jumpStep).toMatch(/a ring on the grass marks where it will come\s+down/);
         expect(jumpStep.replace(/<!--[\s\S]*?-->/g, '')).not.toMatch(/[—;]/);
     });
+
+    /**
+     * THE WELCOME CARD IS A FEW SENTENCES AND A BUTTON. The full rules read as a
+     * wall of text on arrival, so they are folded, but two rules can cost points
+     * before anything has explained them and those have to stay outside.
+     */
+    describe('fold under How to play', () => {
+        const html = read('www', 'xo', 'index.html').replace(/<!--[\s\S]*?-->/g, '');
+        const card = html.slice(html.indexOf('<div id="welcome"'), html.indexOf('<div id="designer"'));
+        const foldStart = card.indexOf('<details');
+        const foldEnd = card.indexOf('</details>');
+        const before = card.slice(0, foldStart);
+        const fold = card.slice(foldStart, foldEnd);
+        const after = card.slice(foldEnd);
+
+        test('closed in the markup, and named the way the playbook button is', () => {
+            expect(foldStart).toBeGreaterThan(-1);
+            expect(fold).toMatch(/^<details id="welcome-howto" class="welcome-howto">/);
+            expect(fold).toMatch(/<summary id="welcome-howto-toggle">How to play<\/summary>/);
+        });
+
+        test('holds the steps, the keys and the points', () => {
+            for (const name of ['welcome-steps', 'welcome-keys', 'welcome-ladder']) {
+                expect(fold).toContain(name);
+                expect(before).not.toContain(name);
+                expect(after).not.toContain(name);
+            }
+        });
+
+        test('leaves the clock, the jump and the number to beat in the open', () => {
+            expect(before).toMatch(/ten seconds to throw or run/);
+            expect(before).toMatch(/press Jump as the\s+button lights up/);
+            expect(before).toMatch(/500 is a perfect game/);
+            expect(before.replace(/\s+/g, ' ')).not.toMatch(/[—;]/);
+        });
+
+        test('reads the clock and the jump out with the dialog', () => {
+            expect(before).toMatch(/aria-describedby="welcome-intro welcome-basics"/);
+            expect(before).toMatch(/<p id="welcome-basics"[^>]*>Call a play/);
+        });
+
+        test('sits above the buttons, with the way back to the directory outside it', () => {
+            expect(after).toContain('id="welcome-actions"');
+            expect(after).toContain('id="welcome-resume"');
+            expect(after).toContain('id="explore-link"');
+            expect(after).toContain('id="avatar-playing"');
+        });
+    });
 });

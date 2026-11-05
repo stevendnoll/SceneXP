@@ -1411,8 +1411,81 @@ body.is-practice .real-game-only {
     border-radius: 10px;
 }
 
+/* The two rules that stay out of the fold, a step below the intro. */
+.welcome-basics {
+    margin-top: 0.75rem;
+}
+
+/* HOW TO PLAY, THE FOLD. A hairline above and below sets it apart as a control
+ * between the words and the buttons, and it is at least 44px tall because this
+ * is a phone's first tap on the page. The default triangle is replaced the way
+ * Earth Defense and Leaves replace theirs: `list-style` and the WebKit
+ * pseudo-element are both needed to retire the built-in marker across browsers.
+ * The rules inside stay left-aligned for reading, though the label is centered
+ * to sit with the words above it. */
+.welcome-howto {
+    margin-top: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.welcome-howto[open] {
+    padding-bottom: 1rem;
+}
+
+.welcome-howto > summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    min-height: 2.75rem;
+    border-radius: 6px;
+    color: #f2f5fa;
+    font-weight: 700;
+    cursor: pointer;
+    list-style: none;
+    transition: color 0.15s ease;
+}
+
+.welcome-howto > summary::-webkit-details-marker {
+    display: none;
+}
+
+.welcome-howto > summary::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 6px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.15s ease;
+}
+
+.welcome-howto[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+/* A phone keeps :hover after a tap, which would leave the label orange. */
+@media (hover: hover) {
+    .welcome-howto > summary:hover {
+        color: #ff992c;
+    }
+}
+
+.welcome-howto > summary:focus-visible {
+    outline: 2px solid #ff992c;
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .welcome-howto > summary,
+    .welcome-howto > summary::before {
+        transition: none;
+    }
+}
+
 .welcome-steps {
-    margin: 1.2rem 0 0;
+    margin: 0.2rem 0 0;
     padding-left: 1.3rem;
     color: #c3cbd9;
     font-size: 0.95rem;
@@ -1459,14 +1532,11 @@ body.is-practice .real-game-only {
 .ladder-pts.is-good { color: #6fe08a; }
 .ladder-pts.is-bad { color: #ff7a7a; }
 
-/* The number to beat. Set apart from the ladder above it, because the ladder is
- * reference and this is the point of the game. */
+/* The number to beat, the last thing said before the rules fold and the buttons,
+ * because the ladder is reference and this is the point of the game. */
 .welcome-target {
-    margin: 1.1rem 0 0;
-    padding-top: 0.9rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    margin: 0.75rem 0 0;
     color: #c3cbd9;
-    font-size: 0.95rem;
     text-align: center;
 }
 

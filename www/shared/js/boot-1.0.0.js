@@ -310,25 +310,35 @@ function cardIsShown(card) {
  *  number of cards it is watching, so a caller can tell "none on this page"
  *  from "not installed".
  *
+ *  `watchParent: true` IS FOR A SCENE THAT HIDES THE OVERLAY AROUND EACH DIALOG
+ *  rather than the dialog itself (the `.card-overlay` pattern). Nothing on the
+ *  dialog changes when such a card opens, so without this the reset installs,
+ *  returns its count and never fires. Off by default, so that a scene pinned to
+ *  this version keeps the behavior it shipped with.
+ *
  *  A no-op where MutationObserver is missing (Node, under test), rather than
  *  a throw in the middle of a scene's setup. */
 export function installCardScrollReset(options = {}) {
     if (typeof document === 'undefined' || typeof MutationObserver !== 'function') return 0;
     const cards = Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"]'));
     if (!cards.length) return 0;
+    const watch = { attributes: true, attributeFilter: ['class', 'hidden'] };
 
     const observers = cards.map((card) => {
+        const parent = options.watchParent ? card.parentElement : null;
+        const isShown = () => cardIsShown(card) && (!parent || cardIsShown(parent));
         // The card's own last-known state, so a class change that does not
         // move it (a theme toggling something else on the same element) does
         // not count as an open.
-        let shown = cardIsShown(card);
+        let shown = isShown();
         const observer = new MutationObserver(() => {
-            const now = cardIsShown(card);
+            const now = isShown();
             if (now === shown) return;
             shown = now;
             if (now) resetCardScroll(card);
         });
-        observer.observe(card, { attributes: true, attributeFilter: ['class', 'hidden'] });
+        observer.observe(card, watch);
+        if (parent) observer.observe(parent, watch);
         return observer;
     });
 

@@ -306,6 +306,80 @@ describe('installCardScrollReset', () => {
     expect(card.scrollTop).toBe(0);
   });
 
+  /* THE `.card-overlay` SHAPE (www/xo, www/office, www/whitestone). The `hidden`
+   * attribute lives on the overlay AROUND the dialog, so nothing on the dialog
+   * ever changes when the card opens. Watching only the dialog installed
+   * cleanly, returned its count, and never fired once. */
+  function makeOverlaidCard(opts) {
+    const card = makeCard(opts);
+    card.classList.remove('hidden');          // the dialog itself is never hidden
+    const overlay = {
+      attrs: { hidden: '' },
+      classList: { contains: () => false },
+      hasAttribute: (a) => a in overlay.attrs,
+    };
+    card.parentElement = overlay;
+    return { card, overlay };
+  }
+
+  test('by default the overlay is not watched, so a pinned scene is unchanged', async () => {
+    const { card, overlay } = makeOverlaidCard({ scrollTop: 260 });
+    const { m, fired } = await withCards([card]);
+    m.installCardScrollReset();
+    expect(fired.map((f) => f.target)).toEqual([card]);
+
+    delete overlay.attrs.hidden;              // the overlay opens
+    fired[0].cb();
+    expect(card.scrollTop).toBe(260);
+  });
+
+  test('watchParent resets the dialog when the overlay around it opens', async () => {
+    const { card, overlay } = makeOverlaidCard({ scrollTop: 260, childScrollTop: 75 });
+    const { m, fired } = await withCards([card]);
+    expect(m.installCardScrollReset({ watchParent: true })).toBe(1);
+    expect(fired.map((f) => f.target)).toEqual([card, overlay]);
+    expect(fired[1].opts).toEqual(fired[0].opts);
+
+    delete overlay.attrs.hidden;
+    fired[1].cb();
+    expect(card.scrollTop).toBe(0);
+    expect(card.child.scrollTop).toBe(0);
+    expect(card.layoutReads).toBeGreaterThan(0);
+  });
+
+  test('watchParent still resets on the open only, every time', async () => {
+    const { card, overlay } = makeOverlaidCard({ scrollTop: 260 });
+    const { m, fired } = await withCards([card]);
+    m.installCardScrollReset({ watchParent: true });
+
+    delete overlay.attrs.hidden;              // first open
+    fired[1].cb();
+    expect(card.scrollTop).toBe(0);
+
+    card.scrollTop = 120;                     // scrolled while open
+    fired[1].cb();                            // a spurious callback, still open
+    expect(card.scrollTop).toBe(120);
+
+    overlay.attrs.hidden = '';                // closed: nothing moves
+    fired[1].cb();
+    expect(card.scrollTop).toBe(120);
+
+    delete overlay.attrs.hidden;              // reopened, back to the top
+    fired[1].cb();
+    expect(card.scrollTop).toBe(0);
+  });
+
+  test('watchParent on a dialog with no parent watches the dialog alone', async () => {
+    const card = makeCard({ scrollTop: 80 });
+    const { m, fired } = await withCards([card]);
+    expect(m.installCardScrollReset({ watchParent: true })).toBe(1);
+    expect(fired.map((f) => f.target)).toEqual([card]);
+
+    card.classList.remove('hidden');
+    fired[0].cb();
+    expect(card.scrollTop).toBe(0);
+  });
+
   test('an AbortSignal disconnects every observer', async () => {
     const cards = [makeCard(), makeCard(), makeCard()];
     const { m, fired } = await withCards(cards);
