@@ -3719,7 +3719,10 @@ function setupEventListeners() {
     // Every tap is a beacon (beacons.js): one listener, one vocabulary, and
     // a link that leaves the page sent so that it outlives it.
     installBeacons(document, { beaconOf: studioBeacon, send: track, leave: trackFinal, signal });
-    installCardScrollReset({ signal });
+    // `watchParent` BECAUSE cards.js HIDES THE OVERLAY AROUND EACH DIALOG, not the
+    // dialog itself, and without it the reset never fires here. A card left open
+    // under another is never hidden, so closing the top one keeps its place.
+    installCardScrollReset({ signal, watchParent: true });
     initCards({ signal });
     // When what opened a card has gone (a button of hers redrawn by the
     // change the card made), focus lands on her bubble rather than nowhere.

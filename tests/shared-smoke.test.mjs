@@ -107,17 +107,12 @@ test('every scene with cards resets their scroll when they open', async () => {
 test('a scene that hides the overlay around its cards has the reset watch it', async () => {
   /* THE PAIRING ABOVE STAYED GREEN WHILE THE RESET DID NOTHING. On a page that
    * hides the overlay around each dialog, nothing on the dialog ever changes,
-   * so the observer installed, reported its count and never fired.
-   *
-   * UNDECIDED: office and whitestone have the same shape and the same missing
-   * reset, left alone until somebody has checked those scenes by eye. When one
-   * adopts `watchParent`, this fails until it comes off the list. */
-  const undecided = ['office', 'whitestone'];
+   * so the observer installed, reported its count and never fired. */
   for (const { scene, html, main } of await everyScene()) {
     const page = html.replace(/<!--[\s\S]*?-->/g, '');
     const overlaid = /<div\b[^>]*\shidden\b[^>]*>\s*<\w+\b[^>]*role="dialog"/.test(page);
     const watches = main.includes('installCardScrollReset({ signal, watchParent: true })');
     expect(`${scene}: overlay hidden: ${overlaid}, reset watches it: ${watches}`)
-      .toBe(`${scene}: overlay hidden: ${overlaid}, reset watches it: ${overlaid && !undecided.includes(scene)}`);
+      .toBe(`${scene}: overlay hidden: ${overlaid}, reset watches it: ${overlaid}`);
   }
 });
