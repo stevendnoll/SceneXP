@@ -143,13 +143,13 @@ export function buildTemplatePicker(container, { templates, selected, onPick = (
  *  panel's place among the ones with captions, so a template whose words
  *  sit beside its pictures still counts 1, 2, 3). */
 export function slotLabel(slots, k, roleNames = []) {
-    const { cell, slot, figure } = slots[k];
+    const { cell, slot, figure, name } = slots[k];
     const cells = [...new Set(slots.map((s) => s.cell))];
     const siblings = slots.filter((s) => s.cell === cell).length;
     const names = { top: 'Top', bottom: 'Bottom', center: 'Middle' };
     let which;
     if (slot === 'label') which = `Label on ${roleNames[figure] || `figure ${figure + 1}`}`;
-    else if (slot === 'prop') which = 'On the board';
+    else if (slot === 'prop') which = name || 'On the board';
     else which = siblings > 1 ? `${names[slot] || 'Top'} caption` : 'Caption';
     return cells.length > 1 ? `Panel ${cells.indexOf(cell) + 1}: ${which}` : which;
 }

@@ -767,12 +767,12 @@ export function hideMilestoneTitle() {
 /**
  * The welcome card.
  *
- * Shown once, before the first playbook. It states the scoring ladder in words,
- * which the field now also paints on the grass (see field.js). That is not a
- * duplication to tidy up: the card is read before a visitor has ever seen the
- * field, and the numerals are read while a play is running. The one that could
- * be dropped is the card's, and it is the one worth keeping, because somebody
- * arriving needs to know what game this is before they are shown a pitch.
+ * Shown once, before the first playbook. It keeps the scoring ladder in words,
+ * folded under How to play, which the field now also paints on the grass (see
+ * field.js). That is not a duplication to tidy up: the card can be read before a
+ * visitor has ever seen the field, and the numerals are read while a play is
+ * running. The one that could be dropped is the card's, and it is the one worth
+ * keeping, because somebody who asks how the game works should be told in full.
  */
 /** Put the welcome card away without pressing anything on it. */
 export function hideWelcome() {
@@ -780,9 +780,21 @@ export function hideWelcome() {
     if (card) card.hidden = true;
 }
 
+/**
+ * HOW TO PLAY, UNFOLDED OR NOT. Set every time the card is shown rather than
+ * left as the visitor had it, because the same card serves two different asks: an
+ * arrival wants the short version, and somebody who pressed How to play in the
+ * playbook has already asked for the long one.
+ */
+function foldRules(open) {
+    const howTo = el('welcome-howto');
+    if (howTo) howTo.open = open;
+}
+
 export function showWelcome(onStart, saved = null, onFresh = null, onPractice = null) {
     const card = el('welcome');
     if (!card) { if (onStart) onStart(); return; }
+    foldRules(false);
     const box = el('welcome-actions');
     box.textContent = '';
 
@@ -835,6 +847,7 @@ export function showWelcome(onStart, saved = null, onFresh = null, onPractice = 
 export function showPracticeWelcome(onStart, onRealGame) {
     const card = el('welcome');
     if (!card) { if (onStart) onStart(); return; }
+    foldRules(false);
     const box = el('welcome-actions');
     box.textContent = '';
     const note = el('welcome-resume');
@@ -880,12 +893,19 @@ export function setPracticeChrome(on) {
  * them. Escape closes it too, because it is a second look rather than a
  * question that has to be answered.
  *
+ * THE RULES ARE ALREADY UNFOLDED, and focus starts on their label rather than on
+ * the button. The card opens at the top, and with the rules open that button can
+ * sit below the fold, where a keyboard visitor could not see their own focus.
+ * From the label, Tab still reaches the button next, and Escape works from
+ * anywhere.
+ *
  * `onClose` runs once, after the card is gone, and is where the caller puts the
  * playbook back.
  */
 export function showHelp(onClose) {
     const card = el('welcome');
     if (!card) { if (onClose) onClose(); return; }
+    foldRules(true);
     const note = el('welcome-resume');
     if (note) note.hidden = true;
     const box = el('welcome-actions');
@@ -917,7 +937,7 @@ export function showHelp(onClose) {
     document.addEventListener('keydown', onEscape);
 
     card.hidden = false;
-    back.focus();
+    (el('welcome-howto-toggle') || back).focus();
 }
 
 /**

@@ -255,6 +255,63 @@ describe('a caption', () => {
         expect(step[3]).toBeCloseTo(rects[0].y + rects[0].h * 0.2 + rects[0].h * 0.3 * CONFIG.caption.inset, 6);
     });
 
+    test('a text tile\'s caption is more than twice a panel\'s, and the longest still fits on every tile at every size (Steve\'s QA, 2026-11-03)', () => {
+        const tiled = TEMPLATES.filter((t) => t.cells.some((c) => c.captions.includes('center')));
+        expect(tiled.map((t) => t.id).sort()).toEqual(['galaxyBrain', 'nopeYep', 'panic']);
+        const LONG = 'sixty characters of ordinary words typed into one small tile';
+        expect(LONG).toHaveLength(CONFIG.caption.maxChars);
+        const K = CONFIG.caption;
+        for (const template of tiled) {
+            for (const { w, h } of CONFIG.export.pictures) {
+                const gutter = h * CONFIG.panel.gutter;
+                const rects = C.layoutGrid(template, w, h, { gutter, padding: gutter });
+                const rect = rects[template.cells.findIndex((c) => c.captions.includes('center'))];
+                const where = `${template.id} at ${w} by ${h}`;
+                // A short caption takes the tile's whole face.
+                const short = recordingContext();
+                C.drawCaptions(short, template, ['panic'], rects, K);
+                const px = short.calls.find((c) => c[0] === 'fillText')[4].px;
+                expect(`${where}: ${px}`).toBe(`${where}: ${Math.round(rect.h * K.tile.size)}`);
+                expect(px).toBeGreaterThan(2 * Math.round(rect.h * K.size));
+                // The longest is every word, on three lines at most, inside
+                // the tile both ways.
+                const long = recordingContext();
+                C.drawCaptions(long, template, [LONG], rects, K);
+                const lines = long.calls.filter((c) => c[0] === 'fillText');
+                expect(lines.map((c) => c[1]).join(' ')).toBe(LONG.toUpperCase());
+                expect(lines.length).toBeLessThanOrEqual(K.tile.maxLines);
+                const face = lines[0][4].px;
+                expect(lines.length * face * K.lineHeight).toBeLessThanOrEqual(rect.h);
+                for (const line of lines) expect(line[1].length * face * 0.55).toBeLessThanOrEqual(rect.w);
+            }
+        }
+    });
+
+    test('a caption on a prop sits where its slot says on the surface, centered for Two Buttons\' plates', () => {
+        const template = { cells: [{ captions: [{ prop: 'left', align: 'center' }, { prop: 'right' }], scene: 'buttons' }] };
+        const plate = { x: 40, y: 200, w: 300, h: 150 };
+        const ctx = recordingContext(0.5);
+        C.drawCaptions(ctx, template, ['rent', 'boat'], [{ x: 0, y: 0, w: 800, h: 400 }], CONFIG.caption, { props: [{ left: plate, right: { ...plate, x: 400 } }] });
+        const [rent, boat] = ctx.calls.filter((c) => c[0] === 'fillText');
+        expect(rent[3]).toBeCloseTo(plate.y + plate.h / 2, 6);
+        // A plate is all a centered caption has, so its face fills it, well up
+        // from what a caption on a board gets (Steve's QA, 2026-11-03).
+        expect(rent[4].px).toBe(Math.round(plate.h * CONFIG.caption.plate.size));
+        expect(boat[4].px).toBe(Math.round(plate.h * CONFIG.caption.size * CONFIG.caption.board.scale));
+        expect(rent[4].px).toBeGreaterThan(boat[4].px);
+        // Unsaid, a surface's caption stays at its top, as The Plan's does.
+        expect(boat[3]).toBeCloseTo(plate.y + plate.h * CONFIG.caption.inset, 6);
+    });
+
+    test('only the tile takes the tile\'s face: a caption at the top or the bottom of a panel keeps its own', () => {
+        const rect = { x: 0, y: 0, w: 500, h: 500 };
+        for (const slot of ['top', 'bottom']) {
+            const ctx = recordingContext();
+            C.drawCaptions(ctx, { cells: [{ captions: [slot] }] }, ['hi'], [rect], CONFIG.caption);
+            expect(ctx.calls.find((c) => c[0] === 'fillText')[4].px).toBe(Math.round(rect.h * CONFIG.caption.size));
+        }
+    });
+
     test('drawCaptions skips a cell with no rect and keeps counting its captions', () => {
         const template = { cells: [{ captions: ['top'] }, { captions: ['center'] }, { captions: ['bottom'] }] };
         const ctx = recordingContext();

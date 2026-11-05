@@ -12,12 +12,16 @@ import { loadRealThree } from './helpers/real-three.mjs';
 let THREE;
 let P;
 let F;
+let TEMPLATES_PART;
+/** The catalog (no THREE of its own, so imported like the rest, in beforeAll). */
+const await_templates = () => TEMPLATES_PART;
 
 beforeAll(async () => {
     THREE = await loadRealThree();
     globalThis.THREE = THREE;
     P = await import('../www/meme/js/poses.js');
     F = await import('../www/shared/js/avatar-figure-1.0.0.min.js');
+    TEMPLATES_PART = await import('../www/meme/js/templates.js');
 });
 
 afterAll(() => {
@@ -31,6 +35,81 @@ function handOf(figure, side) {
     figure.arms[side].traverse((o) => { if (o.userData && o.userData.isHand && !hand) hand = o; });
     return hand.getWorldPosition(new THREE.Vector3());
 }
+
+test('the ring: the hand up beside the chin, the forearm rising to it, the palm to the camera at the template\'s stance, the other arm at rest', () => {
+    const figure = F.createAvatar({});
+    figure.setPose(P.armsFor('ring'));
+    const hand = handOf(figure, 'right');
+    expect(hand.distanceTo(new THREE.Vector3(-0.24, 1.47, 0.21))).toBeLessThan(0.03);
+    const elbow = figure.arms.right.userData.forearm.getWorldPosition(new THREE.Vector3());
+    expect(hand.clone().sub(elbow).normalize().y).toBeGreaterThan(0.9);
+    // Hand and face read as one thing: within a head's width or so of the
+    // chin, with the elbow low and in, not standing out in an L.
+    expect(hand.y).toBeLessThan(figure.head().y);
+    expect(Math.abs(elbow.x)).toBeLessThan(0.36);
+    expect(P.armsFor('ring').left).toEqual(P.armsFor('stand').left);
+    expect(P.RINGED).toContain('ring');
+    const { templateOf } = await_templates();
+    const spec = templateOf('notThatSimple').cells[0].figures[0];
+    expect(spec.pose).toBe('ring');
+    expect(spec.side).toBe('right');
+    figure.group.rotation.y = spec.turn;
+    figure.group.updateMatrixWorld(true);
+    let mesh = null;
+    figure.arms.right.traverse((o) => { if (!mesh && o.userData.isHand) mesh = o; });
+    // The ring lies in the palm's plane, so the palm's normal is its own.
+    const palm = new THREE.Vector3(0, 0, -1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+    expect(palm.dot(new THREE.Vector3(0, 0, 1))).toBeGreaterThan(0.9);
+    // And the thumb's side, where the ring stands, is toward the face.
+    const inner = new THREE.Vector3(1, 0, 0).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+    expect(inner.x).toBeGreaterThan(0.8);
+});
+
+test('the drape: both arms lead, and from The Medal\'s spots the hands come to the nape of the receiver in front, on every build', () => {
+    const { templateOf } = await_templates();
+    const D = P.DRAPE;
+    const [receiver, giver] = templateOf('medal').cells[0].figures;
+    // The template stands them where the pose was solved.
+    expect(receiver.at).toEqual(D.receiver.at);
+    expect(receiver.turn).toBe(D.receiver.turn);
+    expect(giver.at).toEqual(D.giver.at);
+    expect(giver.turn).toBe(D.giver.turn);
+    for (const side of ['right', 'left']) expect(P.armsFor('drape', side)).toEqual(P.armsFor('drape'));
+    expect(P.TWO_ARMED).toEqual(['drape']);
+    expect(P.ENLARGED).toContain('drape');
+    /** A box point in the receiver's own frame: [across, up, forward]. */
+    const inReceiver = (v) => {
+        const [dx, dz] = [v.x - D.receiver.at[0], v.z - D.receiver.at[1]];
+        const [c, s] = [Math.cos(D.receiver.turn), Math.sin(D.receiver.turn)];
+        return [dx * c - dz * s, v.y, dx * s + dz * c];
+    };
+    for (const build of ['straight', 'slim', 'curvy', 'pear', 'broad', 'round', 'full']) {
+        const a = F.createAvatar({ build, sleeves: 'long' });
+        a.group.position.set(D.giver.at[0], 0, D.giver.at[1]);
+        a.group.rotation.y = D.giver.turn;
+        a.setPose(P.armsFor('drape'));
+        const hands = [handOf(a, 'left'), handOf(a, 'right')].map(inReceiver);
+        for (const [x, y, z] of hands) {
+            // Behind the neck, near its middle, at neck height: the fingertips
+            // (a hand's length ahead) are what meet the ribbon.
+            expect(`${build} across ${Math.abs(x) < 0.12}`).toBe(`${build} across true`);
+            expect(`${build} height ${y > 1.33 && y < 1.42}`).toBe(`${build} height true`);
+            expect(`${build} behind ${z < -0.08 && z > -0.2}`).toBe(`${build} behind true`);
+        }
+        // One either side of the middle, not one on top of the other.
+        expect(hands[0][0]).toBeGreaterThan(hands[1][0] + 0.03);
+        // Neither hand is inside the giver's own chest.
+        for (const side of ['left', 'right']) {
+            a.group.position.set(0, 0, 0);
+            a.group.rotation.y = 0;
+            a.group.updateMatrixWorld(true);
+            expect(handOf(a, side).z).toBeGreaterThan(0.25);
+            a.group.position.set(D.giver.at[0], 0, D.giver.at[1]);
+            a.group.rotation.y = D.giver.turn;
+        }
+        a.dispose();
+    }
+});
 
 test('the handshake: two figures stood as The Handshake stands them clasp right hands on one spot, chest high', () => {
     const H = P.HANDSHAKE;
@@ -94,7 +173,7 @@ test('the handshake: two figures stood as The Handshake stands them clasp right 
 });
 
 test('the list names every pose once, stand and lookBack moving no arm', () => {
-    expect(P.POSES).toEqual(['stand', 'dismiss', 'approve', 'present', 'shake', 'point', 'aim', 'lookBack']);
+    expect(P.POSES).toEqual(['stand', 'dismiss', 'approve', 'present', 'shake', 'point', 'aim', 'ring', 'drape', 'lookBack']);
     expect(P.POINTING).toEqual(['point']);
     expect(P.ARM_POSES.stand).toBeNull();
     expect(P.ARM_POSES.lookBack).toBeNull();
@@ -219,7 +298,7 @@ test('the point and the aim stand the thumb up, so the index shows in profile an
     const dismiss = axesOf(figure, 'left');
     expect(dismiss.back.z).toBeLessThan(-0.5);
     expect(dismiss.thumb.x).toBeLessThan(-0.8);
-    expect(P.ENLARGED).toEqual(['dismiss', 'approve', 'present']);
+    expect(P.ENLARGED).toEqual(['dismiss', 'approve', 'present', 'drape']);
     figure.dispose();
 });
 

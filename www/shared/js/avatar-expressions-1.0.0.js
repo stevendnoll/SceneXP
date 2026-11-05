@@ -153,6 +153,97 @@ export function middleOf(object) {
     return { x: (min[0] + max[0]) / 2, y: (min[1] + max[1]) / 2, z: (min[2] + max[2]) / 2 };
 }
 
+/**
+ * Roll a built figure's eyes (Meme Studio's Side Glance, Steve 2026-11-03):
+ * each iris and pupil carried round its eyeball by `turn` radians about the
+ * head's up axis, positive toward the figure's left, and turned with it, so it
+ * stays on the ball however far it goes, where an expression's `pupilShift`
+ * only slides it across the front. `grow` scales the whites first, and with
+ * them a sleepy eye's lid and the lash line, so more white shows and the look
+ * reads at thumbnail size; the irises keep their size. Call it after
+ * `applyExpression`, which sets the whites this measures. Returns `undo()`,
+ * which puts back exactly what was changed.
+ */
+export function rollEyes(figure, turn, { grow = 1 } = {}) {
+    const head = headOf(figure);
+    if (!head) return () => {};
+    const eyes = head.children.filter((o) => o.userData.isEye);
+    const changed = [];
+    const remember = (o) => {
+        changed.push({ o, position: { x: o.position.x, y: o.position.y, z: o.position.z }, scale: { x: o.scale.x, y: o.scale.y, z: o.scale.z }, turn: o.rotation.y });
+    };
+    const eyeOf = (o) => eyes.reduce((best, e) => (Math.abs(e.position.x - o.position.x) < Math.abs(best.position.x - o.position.x) ? e : best), eyes[0]);
+    for (const part of head.children.filter((o) => o.name === 'lid' || o.name === 'lashes')) {
+        const eye = eyeOf(part);
+        remember(part);
+        part.position.x = eye.position.x + (part.position.x - eye.position.x) * grow;
+        part.position.y = eye.position.y + (part.position.y - eye.position.y) * grow;
+        part.scale.x *= grow;
+        part.scale.y *= grow;
+    }
+    for (const e of eyes) {
+        remember(e);
+        e.scale.x *= grow;
+        e.scale.y *= grow;
+    }
+    for (const lens of head.children.filter((o) => o.userData.isIris || o.userData.isPupil)) {
+        const eye = eyeOf(lens);
+        const radius = eye.geometry.parameters.radius;
+        const out = lens.position.z - eye.position.z;
+        remember(lens);
+        // Its place on the ball, the whites' own width across: `out` is how
+        // far it stands from the eye's middle, as a share of the ball's depth.
+        lens.position.x += radius * eye.scale.x * (out / (radius * eye.scale.z)) * Math.sin(turn);
+        lens.position.z = eye.position.z + out * Math.cos(turn);
+        lens.rotation.y = turn;
+    }
+    let undone = false;
+    return () => {
+        if (undone) return;
+        undone = true;
+        for (const c of changed) {
+            c.o.position.set(c.position.x, c.position.y, c.position.z);
+            c.o.scale.set(c.scale.x, c.scale.y, c.scale.z);
+            c.o.rotation.y = c.turn;
+        }
+    };
+}
+
+/**
+ * Lean a built figure's head over (Meme Studio's Not That Simple, Steve's QA
+ * 2026-11-05): the head and the neck tipped together `tilt` radians about the
+ * neck's base, positive toward the figure's right, so the head moves over and
+ * the neck stays on it and on the shoulders, where turning the head alone about
+ * its own middle only rolls it. The figure part's head group holds the hair and
+ * every face piece, so they go with it. Returns `undo()`. Nothing for no tilt, or
+ * a figure with no head or no tagged neck.
+ */
+export function leanHead(figure, tilt) {
+    const head = headOf(figure);
+    const root = figure && (figure.person || figure.group || figure);
+    const neck = root && root.children ? root.children.find((o) => o.userData && o.userData.isNeck) : null;
+    const height = neck && neck.geometry && neck.geometry.parameters ? neck.geometry.parameters.height : 0;
+    if (!head || !(height > 0) || !tilt) return () => {};
+    const base = neck.position.y - height / 2;
+    const saved = [head, neck].map((o) => ({ o, x: o.position.x, y: o.position.y, roll: o.rotation.z }));
+    for (const o of [head, neck]) {
+        const up = o.position.y - base;
+        o.position.x -= up * Math.sin(tilt);
+        o.position.y = base + up * Math.cos(tilt);
+        o.rotation.z = tilt;
+    }
+    let undone = false;
+    return () => {
+        if (undone) return;
+        undone = true;
+        for (const { o, x, y, roll } of saved) {
+            o.position.x = x;
+            o.position.y = y;
+            o.rotation.z = roll;
+        }
+    };
+}
+
 /** A drop of water on the face at `[x, y, z]` in the head's coordinates. */
 function drop(name, at, material) {
     const D = DROP_SIZE;

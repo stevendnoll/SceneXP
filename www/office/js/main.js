@@ -2743,7 +2743,10 @@ function isTyping(target) {
 function setupEventListeners() {
     const signal = cleanupController.signal;
     installCardFocusTrap({ signal });
-    installCardScrollReset({ signal });
+    // `watchParent` BECAUSE cards.js HIDES THE OVERLAY AROUND EACH DIALOG, not the
+    // dialog itself, and without it the reset never fires here. A card left open
+    // under another is never hidden, so closing the top one keeps its place.
+    installCardScrollReset({ signal, watchParent: true });
     initCards({ signal });
     // A card whose opener has gone hands focus to Places (cards.js).
     setFocusFallback(() => el('bar-places'));

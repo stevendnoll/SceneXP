@@ -34,7 +34,7 @@ const copy = (t) => JSON.parse(JSON.stringify(t));
 
 describe('the catalog', () => {
     test('has the ten first-cut templates, each valid, with distinct ids and orders', () => {
-        expect(T.TEMPLATES.map((t) => t.id).sort()).toEqual(['alwaysHasBeen', 'everythingIsFine', 'galaxyBrain', 'handshake', 'headTurn', 'nopeYep', 'panic', 'plan', 'surprised', 'thenNow']);
+        expect(T.TEMPLATES.map((t) => t.id).sort()).toEqual(['alwaysHasBeen', 'everythingIsFine', 'galaxyBrain', 'handshake', 'headTurn', 'medal', 'nopeYep', 'notThatSimple', 'panic', 'plan', 'sideGlance', 'surprised', 'thenNow', 'twoButtons']);
         for (const t of T.TEMPLATES) {
             expect({ [t.id]: T.validateTemplate(t, rules()) }).toEqual({ [t.id]: [] });
         }
@@ -42,7 +42,9 @@ describe('the catalog', () => {
         expect(new Set(ids).size).toBe(ids.length);
         const orders = T.TEMPLATES.map((t) => t.order);
         expect(new Set(orders).size).toBe(orders.length);
-        expect(T.byOrder().map((t) => t.id)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan', 'headTurn', 'handshake', 'alwaysHasBeen', 'everythingIsFine']);
+        expect(T.byOrder().map((t) => t.id)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan', 'headTurn', 'handshake', 'alwaysHasBeen', 'everythingIsFine', 'medal', 'sideGlance', 'notThatSimple', 'twoButtons']);
+        // Two columns in the picker, so an even count fills its last row.
+        expect(T.TEMPLATES.length % 2).toBe(0);
     });
 
     test('the catalog is frozen in the snapshot: a shipped template changes only on purpose', () => {
@@ -220,6 +222,104 @@ describe('the catalog', () => {
     });
 });
 
+describe('the four templates of 2026-11-03', () => {
+    test('The Side Glance changes nothing between its panels but the eyes (Steve: the figure never faces the camera)', () => {
+        const t = T.templateOf('sideGlance');
+        expect(t.grid).toEqual([[{ span: 1 }, { span: 1 }]]);
+        const [first, second] = t.cells.map((c) => c.figures[0]);
+        // Turned to the camera's right in both, a glance back at the camera
+        // and then straight ahead in that same head.
+        expect(first.turn).toBeGreaterThan(0.4);
+        expect(first.turn).toBe(second.turn);
+        expect(first.gaze).toBeLessThan(-first.turn * 0.9);
+        expect(second.gaze).toBe(0);
+        expect(first.look).toBeUndefined();
+        const { gaze: a, ...restFirst } = first;
+        const { gaze: b, ...restSecond } = second;
+        expect(a).not.toBe(b);
+        expect(restFirst).toEqual(restSecond);
+        const { figures: fa, ...cellFirst } = t.cells[0];
+        const { figures: fb, ...cellSecond } = t.cells[1];
+        expect(fa).not.toEqual(fb);
+        expect(cellFirst).toEqual(cellSecond);
+        // A meme of eyes needs them seen, so dark lenses clear; the frames stay.
+        expect(first.overrides).toEqual({ lensColor: 'clear' });
+    });
+
+    test('The Medal stands the visitor twice in one panel, named apart, and only one of them drapes', () => {
+        const t = T.templateOf('medal');
+        expect(t.roles.map((r) => r.cast)).toEqual(['avatar']);
+        const [receiver, giver] = t.cells[0].figures;
+        expect([receiver.role, giver.role]).toEqual(['you', 'you']);
+        expect(receiver.name).not.toBe(giver.name);
+        expect([receiver.pose, giver.pose]).toEqual(['stand', 'drape']);
+        // Both looking to the camera's left, the receiver in front with its
+        // back to the giver, who stands on the camera's right (Steve, 2026-11-03).
+        expect(receiver.turn).toBeLessThan(-0.4);
+        expect(giver.turn).toBeLessThan(-0.4);
+        expect(Math.abs(receiver.turn - giver.turn)).toBeLessThan(0.2);
+        expect(receiver.at[1]).toBeGreaterThan(giver.at[1]);
+        expect(giver.at[0]).toBeGreaterThan(receiver.at[0]);
+        // Both in the shared suit, which lets the gold read on any avatar.
+        expect(receiver.overrides).toEqual(giver.overrides);
+        expect(receiver.overrides.sleeves).toBe('suit');
+        expect(receiver.overrides.hat).toBe('none');
+        // Labels over the heads, clear of the medal on the chest.
+        expect(receiver.labelBelow).toBeLessThan(0);
+        expect(giver.labelBelow).toBeLessThan(0);
+        expect(T.slotsOf(t).map((s) => s.slot)).toEqual(['label', 'label', 'bottom']);
+    });
+
+    test('Two Buttons names each button\'s plate for its field, and centers the words on it', () => {
+        const t = T.templateOf('twoButtons');
+        expect(t.grid).toHaveLength(2);
+        expect(t.cells[0].figures).toEqual([]);
+        expect(T.slotsOf(t)).toEqual([
+            { cell: 0, slot: 'prop', prop: 'left', name: 'Left button' },
+            { cell: 0, slot: 'prop', prop: 'right', name: 'Right button' },
+            { cell: 1, slot: 'bottom' }
+        ]);
+        expect(t.cells[0].captions.map((c) => c.align)).toEqual(['center', 'center']);
+        expect(t.cells[1].figures[0].expression).toBe('sweat');
+        expect(t.cells[1].figures[0].overrides).toEqual({ hat: 'none', lensColor: 'clear' });
+        expect(t.cells[1].scene).toBe('sweat');
+    });
+
+    test('Not That Simple leans the head toward the raised hand: over to the figure\'s right, the arm that leads (Steve, 2026-11-05)', () => {
+        const [figure] = T.templateOf('notThatSimple').cells[0].figures;
+        expect(figure.side).toBe('right');
+        expect(figure.tilt).toBeGreaterThan(0.15);
+        expect(figure.tilt).toBeLessThan(0.4);
+    });
+
+    test('nobody\'s name, place or line is in a template\'s words', () => {
+        const words = JSON.stringify(T.TEMPLATES.map((t) => [t.id, t.title, t.line, t.roles])).toLowerCase();
+        for (const name of ['obama', 'president', 'boromir', 'mordor', 'tolkien', 'gondor', 'one does not', 'walk into', 'pedro', 'monkey', 'puppet']) expect(`${name}: ${words.includes(name)}`).toBe(`${name}: false`);
+    });
+});
+
+describe('white words stay readable (Steve\'s QA, 2026-11-03)', () => {
+    /** White's contrast on a 0xrrggbb color. These are the stored colors:
+     *  lit and tone mapped they show a little lighter (about 5:1 on screen
+     *  for these), so the floor here sits above the goal. */
+    const onWhite = (hex) => {
+        const linear = (v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+        const y = 0.2126 * linear((hex >> 16) & 255) + 0.7152 * linear((hex >> 8) & 255) + 0.0722 * linear(hex & 255);
+        return 1.05 / (y + 0.05);
+    };
+
+    test('on every text tile', () => {
+        const tiles = T.TEMPLATES.flatMap((t) => t.cells).filter((c) => c.captions.includes('center'));
+        expect(tiles.length).toBeGreaterThan(0);
+        for (const cell of tiles) expect(onWhite(Number.parseInt(cell.backdrop.slice(1), 16))).toBeGreaterThan(5.5);
+    });
+
+    test('and on The Plan\'s board, which is darker than a whiteboard for it', async () => {
+        const { CHART } = await import('../www/meme/js/scenes/plan.js');
+        expect(onWhite(CHART.sheet)).toBeGreaterThan(5.5);
+    });
+});
+
 describe('the rules catch', () => {
     const base = () => copy(T.TEMPLATES[0]);
     const problems = (mutate) => {
@@ -336,6 +436,18 @@ describe('the rules catch', () => {
         expect(problems((t) => { t.cells[0].paint = { ceiling: 'city' }; })).toEqual([expect.stringMatching(/paint names "ceiling"/)]);
         expect(problems((t) => { t.cells[0].paint = { wall: 'mural' }; })).toEqual([expect.stringMatching(/paint "mural" has no painter/)]);
         expect(problems((t) => { t.cells[0].paint = { wall: 'city', floor: 'sidewalk' }; })).toEqual([]);
+        // A prop slot's name and place, a figure's name, its eyes.
+        const propped = (slot) => T.validateTemplate({ ...base(), cells: [{ ...base().cells[0], scene: 'plan', captions: [slot] }] }, rules());
+        expect(propped({ prop: 'board', name: 'On it', align: 'center' })).toEqual([]);
+        expect(propped({ prop: 'board', name: '' })).toEqual([expect.stringMatching(/name must be words/)]);
+        expect(propped({ prop: 'board', align: 'sideways' })).toEqual([expect.stringMatching(/align "sideways"/)]);
+        expect(problems((t) => { t.cells[0].figures[0].name = 'You, giving'; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].figures[0].name = 7; })).toEqual([expect.stringMatching(/figure's name must be words/)]);
+        expect(problems((t) => { t.cells[0].figures[0].gaze = -0.7; t.cells[0].figures[0].eyes = 1.5; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].figures[0].gaze = 'left'; })).toEqual([expect.stringMatching(/gaze must be radians/)]);
+        expect(problems((t) => { t.cells[0].figures[0].eyes = 0; })).toEqual([expect.stringMatching(/eyes must be a size/)]);
+        expect(problems((t) => { t.cells[0].figures[0].tilt = 0.2; })).toEqual([]);
+        expect(problems((t) => { t.cells[0].figures[0].tilt = 'over'; })).toEqual([expect.stringMatching(/tilt must be radians/)]);
         // A catalog checked without the painters' list knows none.
         const t = base();
         t.cells[0].paint = { wall: 'city' };

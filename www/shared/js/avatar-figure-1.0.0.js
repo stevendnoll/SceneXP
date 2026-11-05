@@ -72,9 +72,9 @@ export { HAT_SIZE, trimUnder, HAIR_DRAWN };
  * narrowed a touch). 14 (2026-10-26): one-pieces, more bottoms, the
  * underlayer (avatar-layers). 15 (2026-10-26): pupils on the irises.
  * 16 (2026-10-26): the short cuts tapered to stubble, the swoosh over the
- * whole head.
+ * whole head. 17 (2026-11-03): the aviators' top bar reaches the frames.
  */
-export const RENDER_VERSION = 16;
+export const RENDER_VERSION = 17;
 
 /** The options of a field this version draws, when it draws only some (a
  *  piece added to the lists before its figure is ready). A field not named
@@ -799,6 +799,20 @@ function outline(shape, r, s, n = 36) {
     return points;
 }
 
+/** How far an outline's `points` reach from its middle at the height `y`:
+ *  the most |x| where the outline crosses that height, read straight between
+ *  its points. A shape's reach changes with height (a teardrop narrows toward
+ *  its top). */
+function reachAt(points, y) {
+    let reach = 0;
+    points.forEach(([ax, ay], i) => {
+        const [bx, by] = points[(i + 1) % points.length];
+        if (ay === by || (ay - y) * (by - y) > 0) return;
+        reach = Math.max(reach, Math.abs(ax + ((y - ay) / (by - ay)) * (bx - ax)));
+    });
+    return reach;
+}
+
 function buildGlasses(kind, c, look = {}) {
     const G = GLASSES_SIZE;
     const spec = G[kind];
@@ -879,12 +893,17 @@ function buildGlasses(kind, c, look = {}) {
             }
             arms([c.x + s * (x + halfW + tube), c.y + G.y, c.z + G.z], s);
         }
-        const inner = x - halfW - tube;
-        const bridge = (lift) => rod([c.x - inner, c.y + G.y + lift, c.z + G.z], [c.x + inner, c.y + G.y + lift, c.z + G.z], tube * 0.9, frame);
-        // An aviator's second bar sits above the first; the bridge every
-        // style has is the group's last piece (the tests read it there).
-        if (spec.doubleBridge) group.add(bridge(G.bridgeLift + 0.008));
-        group.add(bridge(G.bridgeLift));
+        const bridge = (lift, half) => rod([c.x - half, c.y + G.y + lift, c.z + G.z], [c.x + half, c.y + G.y + lift, c.z + G.z], tube * 0.9, frame);
+        // An aviator's second bar sits above the first, ending inside the
+        // frames at its OWN height: the teardrop narrows toward its top, so
+        // the widest point's measure left it floating 3.7 mm short of each
+        // frame (Steve's QA, 2026-11-03). The bridge every style has is the
+        // group's last piece (the tests read it there).
+        if (spec.doubleBridge) {
+            const lift = G.bridgeLift + 0.008;
+            group.add(bridge(lift, x - reachAt(outline(spec.shape, spec.r, 1), lift)));
+        }
+        group.add(bridge(G.bridgeLift, x - halfW - tube));
     }
     group.traverse((o) => {
         if (o.isMesh) o.castShadow = false;
@@ -1311,7 +1330,7 @@ export function createAvatar(avatar, { overrides = {}, role = 'avatar', extra = 
     if (a.muscles === 'athletic') strengthenArms(person, ATHLETIC_ARMS);
     if (bottomKind === 'skirt') fitSkirt(person, person.children.find((o) => o.userData.isSkirt));
     // The wardrobe's shirts and bottoms (2026-10-25), over the rig's own.
-    if (SHIRT_SIZE[a.sleeves]) dressShirt(person, a.sleeves, colorOf('shirt', a.shirt), skin);
+    if (SHIRT_SIZE[a.sleeves]) dressShirt(person, a.sleeves, colorOf('shirt', a.shirt), skin, { tie: colorOf('tieColor', a.tieColor) });
     // A leotard or a bodysuit (2026-10-26): the shirt carried down into a
     // brief over the hips, the leotard's arms bare.
     if (ONE_PIECE.includes(a.sleeves)) dressOnePiece(person, a.sleeves, colorOf('shirt', a.shirt), skin);

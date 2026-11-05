@@ -37,6 +37,13 @@
  *             toward the edges
  *   soot      the base below and `color` creeping down from the top past
  *             `line` (a share of the height), its edge ragged
+ *   stone     a wall of blocks `block` by `row` meters, every other course
+ *             set over by half, dark `mortar` between, each block its own
+ *             shade by up to `jitter`, weathered by noise, and darkening by
+ *             `vignette` away from the light at `at` (shares)
+ *   curtain   hanging folds every `fold` meters, each its own width by up to
+ *             `wander`, the base at the fold's crest and darker by `depth` in
+ *             its valley, darker by `vignette` toward the corners
  */
 export const PAINTS = Object.freeze({
     city: Object.freeze({
@@ -65,7 +72,9 @@ export const PAINTS = Object.freeze({
     }),
     wash: Object.freeze({ size: 256, at: Object.freeze([0.5, 0.62]), light: 0.3, dark: 0.2 }),
     // A warm gray-brown, not black (Steve, 2026-10-28: too dark).
-    soot: Object.freeze({ size: 256, color: '#4A403B', line: 0.66, depth: 0.7, scale: 4, octaves: 4 })
+    soot: Object.freeze({ size: 256, color: '#4A403B', line: 0.66, depth: 0.7, scale: 4, octaves: 4 }),
+    stone: Object.freeze({ size: 512, block: 0.5, row: 0.27, mortar: 0.012, jitter: 0.16, vignette: 0.55, at: Object.freeze([0.72, 0.66]), scale: 9, octaves: 3 }),
+    curtain: Object.freeze({ size: 256, fold: 0.32, wander: 0.35, depth: 0.55, vignette: 0.3 })
 });
 
 export const PAINT_IDS = Object.freeze(Object.keys(PAINTS));
@@ -327,7 +336,50 @@ function soot(base, size) {
     });
 }
 
-const PAINTERS = Object.freeze({ city, sidewalk, storm, wash, soot });
+/** Courses of stone blocks in `base`, lit from `at`. */
+function stone(base, size, dims) {
+    const S = PAINTS.stone;
+    const c = rgb(base);
+    const dark = mix(c, BLACK, 0.55);
+    const noise = valueNoise(33);
+    const shade = (row, col) => {
+        const n = Math.sin(row * 127.1 + col * 311.7) * 43758.5453;
+        return (n - Math.floor(n)) * 2 - 1;
+    };
+    return fill(size, (u, v) => {
+        const x = u * dims.width;
+        const y = v * dims.height;
+        const row = Math.floor(y / S.row);
+        const along = x + (row % 2 ? S.block / 2 : 0);
+        const col = Math.floor(along / S.block);
+        const edge = Math.min(along - col * S.block, (col + 1) * S.block - along, y - row * S.row, (row + 1) * S.row - y);
+        const lit = 1 - S.vignette * smooth(0.1, 0.8, Math.hypot(u - S.at[0], v - S.at[1]));
+        const face = 1 + S.jitter * shade(row, col) + (fbm(noise, u * S.scale, v * S.scale, S.octaves) - 0.5) * 0.3;
+        return mix(dark, c, smooth(S.mortar * 0.5, S.mortar, edge)).map((value) => value * face * lit);
+    });
+}
+
+/** Hanging folds of `base`. */
+function curtain(base, size, dims) {
+    const C = PAINTS.curtain;
+    const c = rgb(base);
+    const valley = mix(c, BLACK, C.depth);
+    const roll = rng(29);
+    // The folds' centers across the wall, each its own width.
+    const centers = [];
+    for (let x = 0; x < dims.width + C.fold; x += C.fold * (1 + C.wander * (roll() - 0.5))) centers.push(x);
+    return fill(size, (u, v) => {
+        const x = u * dims.width;
+        let k = 0;
+        while (k < centers.length - 2 && centers[k + 1] <= x) k++;
+        const t = (x - centers[k]) / (centers[k + 1] - centers[k]);
+        const crest = 0.5 - 0.5 * Math.cos(t * Math.PI * 2);
+        const edge = Math.hypot(u - 0.5, v - 0.5);
+        return mix(valley, c, crest).map((value) => value * (1 - C.vignette * smooth(0.3, 0.75, edge)));
+    });
+}
+
+const PAINTERS = Object.freeze({ city, sidewalk, storm, wash, soot, stone, curtain });
 
 /** [r, g, b] (0 to 255) with its HSL lightness held to `cap` at most. */
 function capLightness([r, g, b], cap) {

@@ -39,6 +39,19 @@
  *   aim       the arm straight out in front at shoulder height, a little
  *             across the body, for a thing held: the hand at
  *             (-0.14, 1.39, 0.56), the forearm level along +z
+ *   ring      the elbow low and forward, the forearm up, the palm to the camera
+ *             and the hand beside the chin, so hand and face read as one
+ *             thing, the ring (hands-1.0.0) toward the face: the hand at
+ *             (-0.24, 1.47, 0.21), close by the head the template leans to it
+ *             (Steve's QA, 2026-11-03 and 2026-11-05: an arm out in an L, then
+ *             a hand a long way off the face)
+ *   drape     BOTH arms, for fastening a ribbon at the nape of someone standing
+ *             just in front with their back to the figure, both looking the
+ *             same way (Steve's QA, 2026-11-03), at the box spots The Medal
+ *             names (`DRAPE`): open hands side by side at (-0.07, 1.38, 0.37)
+ *             and (-0.21, 1.38, 0.34), the fingertips at that nape and the backs
+ *             of the hands up and to the camera (fists there read as a pale
+ *             wedge on the shoulder)
  *
  * tests/meme-poses.test.mjs holds the hands to those regions, so a rig edit
  * that moves them is caught.
@@ -69,6 +82,12 @@ export const ARM_POSES = Object.freeze({
     shake: Object.freeze({ z: -0.06, x: -0.84, fore: -1.28, twist: 1.22 }),
     point: Object.freeze({ z: 0.87, x: -1.09, fore: -0.51, twist: 1.48 }),
     aim: Object.freeze({ z: -0.13, x: -1.76, fore: 0.07, twist: 1.14 }),
+    ring: Object.freeze({ z: 0.28, x: -1.06, fore: -2.17, twist: 0.1 }),
+    // Both arms named: neither rests.
+    drape: Object.freeze({
+        right: Object.freeze({ z: -0.03, x: -0.82, fore: -1.83, twist: -2.48 }),
+        left: Object.freeze({ z: -0.82, x: -0.97, fore: -1.19, twist: 0.28 })
+    }),
     lookBack: null
 });
 
@@ -80,15 +99,31 @@ export const ARM_POSES = Object.freeze({
 export const POINTING = Object.freeze(['point']);
 export const FISTED = Object.freeze(['aim']);
 
+/** The poses that make the finger-and-thumb ring of the leading hand. */
+export const RINGED = Object.freeze(['ring']);
+
+/** The poses that lead with both arms, so a hand shape goes on both. */
+export const TWO_ARMED = Object.freeze(['drape']);
+
 /** The poses whose leading hand stays the rig's open hand but is drawn
  *  at the fist's larger size, so every action hand is one size (Steve,
  *  2026-10-28: the Nope hand beside the Yep fist). */
-export const ENLARGED = Object.freeze(['dismiss', 'approve', 'present']);
+export const ENLARGED = Object.freeze(['dismiss', 'approve', 'present', 'drape']);
 
 /** Where The Handshake stands its two figures: `gap` apart across, each
  *  `aside` toward its own left (so the right hands meet), turned `turn`
  *  radians from facing each other toward the camera. */
 export const HANDSHAKE = Object.freeze({ gap: 0.8, aside: 0.23, turn: 0.5 });
+
+/** Where The Medal stands its two figures, `at` [x, z] in the box and `turn`
+ *  radians, both looking to the camera's left (Steve's QA, 2026-11-03): the
+ *  `receiver` in front with its back to the `giver`, who stands behind it on the
+ *  camera's right, far enough over that the camera sees both faces. `drape` is
+ *  solved for these spots. */
+export const DRAPE = Object.freeze({
+    receiver: Object.freeze({ at: Object.freeze([-0.22, 0.14]), turn: -0.7 }),
+    giver: Object.freeze({ at: Object.freeze([0.2, -0.12]), turn: -0.75 })
+});
 
 /** How far the head turns for each pose, radians (a figure that turns its
  *  back looks back over its shoulder). Which way is the figure's `look`. */
@@ -100,6 +135,8 @@ export const HEAD_TURNS = Object.freeze({
     shake: 0,
     point: 0.35,
     aim: 0,
+    ring: 0,
+    drape: 0,
     lookBack: 0.95
 });
 
@@ -134,12 +171,14 @@ export const SIDES = Object.freeze(['right', 'left']);
 /** The `setPose` pose for `id`: the leading arm on `side` ('right' or
  *  'left', the figure's own), the other at rest, the hand's `twist` about
  *  the forearm the pose's own unless given (radians; a template gives one
- *  where two figures share a pose but not a stance, The Handshake). Rest
- *  for `stand` or an unknown id. */
+ *  where two figures share a pose but not a stance, The Handshake). A pose
+ *  that names both arms (`TWO_ARMED`) is itself whatever the side. Rest for
+ *  `stand` or an unknown id. */
 export function armsFor(id, side = 'right', twist = undefined) {
     const lead = ARM_POSES[id];
     const rest = { ...REST };
     if (!lead) return { right: { ...rest }, left: { ...rest } };
+    if (lead.right && lead.left) return { right: { ...lead.right }, left: { ...lead.left } };
     const arm = Number.isFinite(twist) ? { ...lead, twist } : { ...lead };
     return side === 'left' ? { right: rest, left: arm } : { right: arm, left: rest };
 }

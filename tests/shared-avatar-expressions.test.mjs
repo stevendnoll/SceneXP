@@ -255,6 +255,138 @@ test('a sleepy eye is thrown open, and undo puts back everything exactly, once, 
     }
 });
 
+test('rolled eyes go round the ball and stay on it, the whites grown and the irises not, and undo puts it all back, once (2026-11-03)', () => {
+    const figure = F.createAvatar({});
+    const head = headOf(figure);
+    const eyes = eyesOf(head);
+    const lenses = lensesOf(head);
+    const snap = () => [...eyes, ...lenses].map((o) => [o.position.toArray(), o.scale.toArray(), o.rotation.y]);
+    const before = snap();
+    const parts = lenses.map((l) => ({ x: l.position.x, z: l.position.z, scale: l.scale.toArray() }));
+    const whites = eyes.map((e) => e.scale.toArray());
+    const turn = -0.72;
+    const grow = 1.5;
+    const undo = X.rollEyes(figure, turn, { grow });
+    // The whites grow across and up, not deeper; the irises keep their size.
+    eyes.forEach((e, i) => expect(e.scale.toArray()).toEqual([whites[i][0] * grow, whites[i][1] * grow, whites[i][2]]));
+    lenses.forEach((l, i) => {
+        expect(l.scale.toArray()).toEqual(parts[i].scale);
+        // Toward the figure's right for a negative turn, back round the ball,
+        // and turned with it.
+        expect(l.position.x).toBeLessThan(parts[i].x - 0.01);
+        expect(l.position.z).toBeLessThan(parts[i].z);
+        expect(l.rotation.y).toBe(turn);
+        const eye = eyes.find((e) => Math.sign(e.position.x) === Math.sign(parts[i].x));
+        const radius = eye.geometry.parameters.radius;
+        // A lens on the ball: the same share of its radius out as it was.
+        const was = (parts[i].z - eye.position.z) / (radius * eye.scale.z);
+        const now = Math.hypot((l.position.x - parts[i].x) / (radius * eye.scale.x), (l.position.z - eye.position.z) / (radius * eye.scale.z));
+        expect(now).toBeCloseTo(was, 6);
+    });
+    // At this roll the iris stops at the white's rim, not past it into the
+    // skin (the first cut, 0.85, sank there).
+    const irises = lenses.filter((l) => l.userData.isIris);
+    irises.forEach((iris) => {
+        const eye = eyes.find((e) => Math.sign(e.position.x) === Math.sign(iris.position.x));
+        const r = eye.geometry.parameters.radius * eye.scale.x;
+        expect(Math.abs(iris.position.x - eye.position.x) + iris.geometry.parameters.radius * iris.scale.x).toBeLessThan(r * 1.05);
+    });
+    undo();
+    expect(snap()).toEqual(before);
+    X.rollEyes(figure, 0.4)();
+    expect(snap()).toEqual(before);
+    undo();
+    expect(snap()).toEqual(before);
+    figure.dispose();
+});
+
+test('a positive roll goes to the figure\'s left, each lens on its own eye even when an expression has slid it', () => {
+    const figure = F.createAvatar({});
+    const head = headOf(figure);
+    X.applyExpression(figure, 'sideEye');
+    const lenses = lensesOf(head);
+    const before = lenses.map((l) => l.position.x);
+    X.rollEyes(figure, 0.5);
+    lenses.forEach((l, i) => expect(l.position.x).toBeGreaterThan(before[i]));
+    figure.dispose();
+});
+
+test('a sleepy lid and the lash line grow with the eye, so neither is left smaller than the white, and go back', () => {
+    for (const eyeShape of ['sleepy', 'lashes']) {
+        const figure = F.createAvatar({ eyeShape });
+        const head = headOf(figure);
+        const parts = head.children.filter((o) => o.name === 'lid' || o.name === 'lashes');
+        expect(parts.length).toBeGreaterThan(0);
+        const before = parts.map((o) => [o.scale.x, o.position.x, o.position.y]);
+        const undo = X.rollEyes(figure, 0, { grow: 1.5 });
+        parts.forEach((o, i) => expect(o.scale.x).toBeCloseTo(before[i][0] * 1.5, 9));
+        undo();
+        expect(parts.map((o) => [o.scale.x, o.position.x, o.position.y])).toEqual(before);
+        figure.dispose();
+    }
+});
+
+test('a leaned head goes over with the neck, about the neck\'s base, positive toward the figure\'s right, and undo puts it back, once (2026-11-05)', () => {
+    const figure = F.createAvatar({});
+    const head = headOf(figure);
+    const neck = figure.person.children.find((o) => o.userData.isNeck);
+    // The rig tags its neck: a lean with nothing to find would do nothing, quietly.
+    expect(neck).toBeTruthy();
+    const height = neck.geometry.parameters.height;
+    const [hx, hy, nx, ny] = [head.position.x, head.position.y, neck.position.x, neck.position.y];
+    const base = ny - height / 2;
+    const tilt = 0.24;
+    const undo = X.leanHead(figure, tilt);
+    // Over toward the figure's right (-x), the crown tipped that way as well.
+    expect(head.position.x).toBeLessThan(hx - 0.04);
+    expect(head.rotation.z).toBe(tilt);
+    expect(neck.rotation.z).toBe(tilt);
+    // The neck's base stays on the shoulders: its middle, less half its height
+    // along its new line, lands back where the base was.
+    const along = new THREE.Vector3(-Math.sin(tilt), Math.cos(tilt), 0);
+    const foot = neck.position.clone().addScaledVector(along, -height / 2);
+    expect(foot.x).toBeCloseTo(nx, 6);
+    expect(foot.y).toBeCloseTo(base, 6);
+    // And the head stays on the neck: as far along that line as it stood.
+    const fromFoot = head.position.clone().sub(foot);
+    expect(fromFoot.length()).toBeCloseTo(hy - base, 6);
+    expect(fromFoot.normalize().dot(along)).toBeCloseTo(1, 6);
+    // The hair and the face pieces are in the head group, so they go with it.
+    expect(head.children.length).toBeGreaterThan(3);
+    undo();
+    expect([head.position.x, head.position.y, neck.position.x, neck.position.y]).toEqual([hx, hy, nx, ny]);
+    expect([head.rotation.z, neck.rotation.z]).toEqual([0, 0]);
+    X.leanHead(figure, 0.3);
+    const leaned = head.position.x;
+    undo();
+    expect(head.position.x).toBe(leaned);
+    figure.dispose();
+});
+
+test('no lean, no head or no neck to find change nothing', () => {
+    const figure = F.createAvatar({});
+    const head = headOf(figure);
+    const x = head.position.x;
+    X.leanHead(figure, 0)();
+    expect(head.position.x).toBe(x);
+    expect(head.rotation.z).toBe(0);
+    expect(() => X.leanHead({}, 0.3)()).not.toThrow();
+    expect(() => X.leanHead(null, 0.3)()).not.toThrow();
+    // A figure with a head but no tagged neck.
+    const bare = new THREE.Group();
+    const lone = new THREE.Group();
+    lone.name = 'head';
+    bare.add(lone);
+    X.leanHead({ person: bare }, 0.3);
+    expect(lone.rotation.z).toBe(0);
+    figure.dispose();
+});
+
+test('rolling the eyes of a figure with no head changes nothing', () => {
+    const undo = X.rollEyes({}, 0.5);
+    expect(() => undo()).not.toThrow();
+});
+
 test('the saved face, an unknown id, and a figure with no head change nothing', () => {
     const figure = F.createAvatar({});
     const head = headOf(figure);

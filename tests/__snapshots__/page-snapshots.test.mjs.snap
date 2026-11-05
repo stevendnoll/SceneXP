@@ -3718,7 +3718,7 @@ html [lang="en"]
                     h3
                       "Meme Studio"
                     p
-                      "Your avatar stars in a meme built from small lit 3D boxes. Pick one of ten templates, type a caption for each panel, choose the faces, and bring a friend's avatar in too. Then share it as a picture, or as a link your friend can open and remix with their own avatar."
+                      "Your avatar stars in a meme built from small lit 3D boxes. Pick one of fourteen templates, type a caption for each panel, choose the faces, and bring a friend's avatar in too. Then share it as a picture, or as a link your friend can open and remix with their own avatar."
                     p.experience-date
                       "Released"
                       time [datetime="2026-10-28"]
@@ -5314,6 +5314,10 @@ html [lang="en"]
     link [href="js/scenes/space.min.js" rel="modulepreload"]
     link [href="js/scenes/fine.min.js" rel="modulepreload"]
     link [href="js/scenes/handshake.min.js" rel="modulepreload"]
+    link [href="js/scenes/buttons.min.js" rel="modulepreload"]
+    link [href="js/scenes/hall.min.js" rel="modulepreload"]
+    link [href="js/scenes/medal.min.js" rel="modulepreload"]
+    link [href="js/scenes/wear.min.js" rel="modulepreload"]
     link [href="favicon.svg?v=1" rel="icon" type="image/svg+xml"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
     link [href="css/meme.min.css?v=7" rel="stylesheet"]
@@ -8905,7 +8909,7 @@ html [data-ui-theme="neon" lang="en"]
     title
       "X's and O's | SceneXP"
     link [as="style" href="../shared/css/styles-1.0.0.min.css?v=7" rel="preload"]
-    link [as="style" href="css/experience.min.css?v=29" rel="preload"]
+    link [as="style" href="css/experience.min.css?v=30" rel="preload"]
     link [href="../lib/three/r186/three.min.js" rel="modulepreload"]
     link [href="js/main.min.js" rel="modulepreload"]
     link [href="js/config.min.js" rel="modulepreload"]
@@ -8975,7 +8979,7 @@ html [data-ui-theme="neon" lang="en"]
     link [href="js/lead.min.js" rel="modulepreload"]
     link [href="favicon.ico" rel="icon" sizes="16x16 32x32 48x48 64x64" type="image/x-icon"]
     link [href="../shared/css/styles-1.0.0.min.css?v=7" rel="stylesheet"]
-    link [href="css/experience.min.css?v=29" rel="stylesheet"]
+    link [href="css/experience.min.css?v=30" rel="stylesheet"]
     link [href="../shared/css/avatar-1.0.0.min.css" rel="stylesheet"]
     noscript
       link [href="../shared/css/no-js-1.0.0.min.css" rel="stylesheet"]
@@ -9011,7 +9015,7 @@ html [data-ui-theme="neon" lang="en"]
           "Loading…"
     canvas#game-canvas [aria-label="A 3D football field, seen from behind your offense." role="img"]
     div#welcome.card-overlay [hidden]
-      div.card-panel.welcome-panel [aria-describedby="welcome-intro" aria-labelledby="welcome-title" aria-modal="true" role="dialog"]
+      div.card-panel.welcome-panel [aria-describedby="welcome-intro welcome-basics" aria-labelledby="welcome-title" aria-modal="true" role="dialog"]
         h2#welcome-title.card-title.welcome-title
           img.welcome-logo [alt="" decoding="async" height="64" src="assets/exes-n-ohs-logo-64.jpg" width="64"]
           span
@@ -9020,112 +9024,117 @@ html [data-ui-theme="neon" lang="en"]
           "Ten plays, and you are on offense for every one of them. The farther you carry the ball, the more the play is worth."
         p#welcome-practice.card-detail.welcome-practice [hidden]
           "You are in Practice Mode. There is no defense on the field, so you can learn the routes and try out your own plays. Practice scores never touch your best score or a game you have saved."
-        ol.welcome-steps
-          li
-            strong
-              "Call a play."
-            "Pick one from the playbook"
-            span.real-game-only
-              ", and choose a defense to face or leave it to chance"
-            "."
-          li
-            strong
-              "Snap the ball."
-            "Take as long as you like reading the formation first."
-          li
-            strong
-              "Throw or run."
-            "Hit a receiver, or keep it yourself and see how far you get. You have ten seconds from the snap to make up your mind, and holding on past that is"
-            span.real-game-only
-              "a sack"
-            span.practice-only
-              "five points off"
-            "."
-          li
-            strong
-              "Jump for it."
-            "While the ball is in the air, a ring on the grass marks where it will come down. Press Jump or tap your receiver to send him up for it. The button lights up as the ball arrives. Jump too early or too late and the pass can sail past him"
-            span.real-game-only
-              "or be picked off"
-            ". If you would rather just watch, turn on Auto jump in the playbook."
-          li
-            strong
-              "Share the play."
-            "After the whistle, watch the replay from any of five views, one of them over the quarterback's shoulder, then share a short clip of it, made right on your device, or save a picture of its best moment."
-          li
-            strong
-              "Design a play."
-            "The first tile in the playbook opens a field to draw on. Pick a formation, choose a receiver or the quarterback, and draw their route from where they stand. Where the line ends is where they stop. Saved plays stay in your book, on this device."
-        p.welcome-keys.card-meta
-          "On a keyboard:"
-          kbd
-            "Space"
-          ","
-          kbd
-            "S"
-          "or"
-          kbd
-            "Q"
-          "snaps the ball,"
-          kbd
-            "C"
-          "changes the play before you do,"
-          kbd
-            "A"
-          "to"
-          kbd
-            "D"
-          "throw to that receiver, and"
-          kbd
-            "K"
-          "keeps it. With the ball in the air,"
-          kbd
-            "J"
-          "or"
-          kbd
-            "Space"
-          "jumps. During a replay,"
-          kbd
-            "V"
-          "or the arrow keys switch the view, and"
-          kbd
-            "V"
-          "switches it again when you share the play."
-        p.welcome-ladder-title
-          "What a play is worth"
-        ul.welcome-ladder
-          li
-            span.ladder-pts.is-good
-              "5"
-            "past the first line"
-          li
-            span.ladder-pts.is-good
-              "15"
-            "past the second"
-          li
-            span.ladder-pts.is-good
-              "30"
-            "past the third"
-          li
-            span.ladder-pts.is-good
-              "50"
-            "all the way across"
-          li
-            span.ladder-pts.is-bad
-              "-5"
-            span.real-game-only
-              "sacked holding the ball"
-            span.practice-only
-              "out of time holding the ball"
-          li.real-game-only
-            span.ladder-pts.is-bad
-              "-10"
-            "intercepted"
+        p#welcome-basics.card-detail.welcome-basics
+          "Call a play and snap the ball, then you have ten seconds to throw or run. When a pass is in the air, press Jump as the button lights up."
         p.welcome-target
           "Fifty a play is the most you can get, so"
           strong
             "500 is a perfect game"
           ". Good luck."
+        details#welcome-howto.welcome-howto
+          summary#welcome-howto-toggle
+            "How to play"
+          ol.welcome-steps
+            li
+              strong
+                "Call a play."
+              "Pick one from the playbook"
+              span.real-game-only
+                ", and choose a defense to face or leave it to chance"
+              "."
+            li
+              strong
+                "Snap the ball."
+              "Take as long as you like reading the formation first."
+            li
+              strong
+                "Throw or run."
+              "Hit a receiver, or keep it yourself and see how far you get. You have ten seconds from the snap to make up your mind, and holding on past that is"
+              span.real-game-only
+                "a sack"
+              span.practice-only
+                "five points off"
+              "."
+            li
+              strong
+                "Jump for it."
+              "While the ball is in the air, a ring on the grass marks where it will come down. Press Jump or tap your receiver to send him up for it. The button lights up as the ball arrives. Jump too early or too late and the pass can sail past him"
+              span.real-game-only
+                "or be picked off"
+              ". If you would rather just watch, turn on Auto jump in the playbook."
+            li
+              strong
+                "Share the play."
+              "After the whistle, watch the replay from any of five views, one of them over the quarterback's shoulder, then share a short clip of it, made right on your device, or save a picture of its best moment."
+            li
+              strong
+                "Design a play."
+              "The first tile in the playbook opens a field to draw on. Pick a formation, choose a receiver or the quarterback, and draw their route from where they stand. Where the line ends is where they stop. Saved plays stay in your book, on this device."
+          p.welcome-keys.card-meta
+            "On a keyboard:"
+            kbd
+              "Space"
+            ","
+            kbd
+              "S"
+            "or"
+            kbd
+              "Q"
+            "snaps the ball,"
+            kbd
+              "C"
+            "changes the play before you do,"
+            kbd
+              "A"
+            "to"
+            kbd
+              "D"
+            "throw to that receiver, and"
+            kbd
+              "K"
+            "keeps it. With the ball in the air,"
+            kbd
+              "J"
+            "or"
+            kbd
+              "Space"
+            "jumps. During a replay,"
+            kbd
+              "V"
+            "or the arrow keys switch the view, and"
+            kbd
+              "V"
+            "switches it again when you share the play."
+          p.welcome-ladder-title
+            "What a play is worth"
+          ul.welcome-ladder
+            li
+              span.ladder-pts.is-good
+                "5"
+              "past the first line"
+            li
+              span.ladder-pts.is-good
+                "15"
+              "past the second"
+            li
+              span.ladder-pts.is-good
+                "30"
+              "past the third"
+            li
+              span.ladder-pts.is-good
+                "50"
+              "all the way across"
+            li
+              span.ladder-pts.is-bad
+                "-5"
+              span.real-game-only
+                "sacked holding the ball"
+              span.practice-only
+                "out of time holding the ball"
+            li.real-game-only
+              span.ladder-pts.is-bad
+                "-10"
+              "intercepted"
         p#welcome-resume.card-meta.welcome-resume [hidden]
         div#welcome-actions.card-actions
         p#avatar-playing.card-meta.avatar-line

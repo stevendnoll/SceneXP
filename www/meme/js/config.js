@@ -101,8 +101,20 @@ export const MEME_PAGE = deepFreeze({
         /** A caption on a prop's surface (the chart's sheet): the face
          *  `scale` times the size a panel of the sheet's height would get,
          *  since the sheet is small, up to `maxLines` lines (Steve,
-         *  2026-10-28: bigger words on the board). */
-        board: { scale: 1.9, maxLines: 3 }
+         *  2026-10-28 and 2026-11-03: bigger words on the board). */
+        board: { scale: 2.3, maxLines: 3 },
+        /** A text tile's caption (the `center` slot), which has its panel to
+         *  itself: a larger face, its own `smallest` so the longest caption
+         *  still fits in `maxLines` on a tall tile, and a third line. The
+         *  face follows the panel's height, so the templates with the most
+         *  rows drew the fewest pixels (Steve's QA, 2026-11-03: Galaxy Brain
+         *  was about 9 px on a phone). */
+        tile: { size: 0.24, smallest: 0.25, maxLines: 3 },
+        /** A caption centered on a prop's small surface (Two Buttons' plates),
+         *  which is all it has: a face well up its height, down to `smallest`
+         *  of that for the longest (Steve's QA, 2026-11-03: too small for its
+         *  plate). */
+        plate: { size: 0.4, smallest: 0.35, maxLines: 3 }
     },
 
     /** A label pinned to a figure (compose.js): the face `size` as a share

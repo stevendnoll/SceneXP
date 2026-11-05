@@ -24,6 +24,10 @@
  *   grip      a hand on a ball (X's and O's quarterback, 2026-11-01): the
  *             hand turned about the forearm to face the ball, the fingers
  *             bent down onto its surface, the thumb round its inner side
+ *   ring      the index and the thumb meeting in a loop in the palm's plane,
+ *             the other three up (Meme Studio's Not That Simple, 2026-11-03)
+ *   press     the index straight and thick, the others curled back (Meme
+ *             Studio's Two Buttons, 2026-11-03)
  *
  * The rig's open hand curled its three fingers in the first cut (the same
  * capsules, bent), which read as a lumpy palm at panel size.
@@ -297,6 +301,119 @@ export function gripHand(hand, { radius, ball } = {}) {
     return held;
 }
 
+/** A hand built of the rig's palm and capsule fingers, by `draw(limb)`, where
+ *  `limb(a, b, r)` lays a capsule of radius `r` from `a` to `b`, [x, y, z] in
+ *  hand units. The back of the hand toward +z, the fingers toward -y. */
+function capsuleHand(unit, draw) {
+    const H = HAND;
+    const parts = [];
+    const [pw, ph, pd] = H.palm;
+    const palmBottom = H.palmTop - ph;
+    const outline = new THREE.Shape();
+    outline.moveTo(-pw / 2 * unit, palmBottom * unit);
+    outline.lineTo(pw / 2 * unit, palmBottom * unit);
+    outline.lineTo(H.palmNeck / 2 * unit, H.palmTop * unit);
+    outline.lineTo(-H.palmNeck / 2 * unit, H.palmTop * unit);
+    outline.closePath();
+    const palm = new THREE.Matrix4();
+    palm.setPosition(0, 0, -pd / 2 * unit);
+    // Beveled: at these larger sizes a sharp slab read as a flat card.
+    parts.push({ geometry: new THREE.ExtrudeGeometry(outline, { depth: pd * unit, bevelEnabled: true, bevelThickness: 0.1 * unit, bevelSize: 0.1 * unit, bevelSegments: 2 }), matrix: palm });
+    draw((a, b, r) => {
+        const from = new THREE.Vector3(...a);
+        const to = new THREE.Vector3(...b);
+        const m = new THREE.Matrix4();
+        m.makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize()));
+        const middle = from.clone().add(to).multiplyScalar(0.5);
+        m.setPosition(middle.x * unit, middle.y * unit, middle.z * unit);
+        parts.push({ geometry: new THREE.CapsuleGeometry(r * unit, Math.max(0.01, from.distanceTo(to)) * unit, 4, 10), matrix: m });
+    });
+    return mergeParts(parts);
+}
+
+/**
+ * A HAND WITH THE FINGER AND THUMB IN A RING (Meme Studio's Not That Simple,
+ * Steve's QA 2026-11-03: the first cut, a loop leaning off a palm with its
+ * fingers curled away, read as a pretzel beside a rectangle). The hand everyone
+ * knows: the loop in the palm's own plane, on the thumb's side, so a camera on
+ * the palm sees the ring round and the palm broad at once, and the other three
+ * fingers up and fanned.
+ *
+ * In hand units, [out, y], `out` the way off the palm toward the thumb's side:
+ * the loop is a circle about `center` of radius `r`, the index drawn from its
+ * `knuckle` through the circle at `indexAt` (degrees from `out`, toward the
+ * wrist, +y), the thumb from its `base` through `thumbAt`, their tips
+ * overlapping. `indexR` and `thumbR` are their thickness; the others stand on
+ * the palm at `across` (toward the thumb's side), `long` times the rig's length
+ * (with a shorter finger the hand read as all palm), fanned `fan` radians each
+ * and bent `curl` toward the palm. `scale` is the whole hand against the action
+ * hands' one size (Steve's QA, 2026-11-03: at that size, up beside the face and
+ * nearer the camera, it stood as tall as the head).
+ */
+export const RING = Object.freeze({
+    center: Object.freeze([1.05, -0.45]),
+    r: 0.55,
+    knuckle: Object.freeze([0.48, -0.7]),
+    indexAt: Object.freeze([225, 270, 315, 355, 25]),
+    base: Object.freeze([0.55, 0.3]),
+    thumbAt: Object.freeze([115, 70, 35]),
+    indexR: 0.19, thumbR: 0.23,
+    across: Object.freeze([0.16, -0.16, -0.48]), fan: 0.13, curl: 0.3, long: 1.4, scale: 0.78
+});
+
+export function ringGeometry(unit, inner) {
+    const R = RING;
+    const palmBottom = HAND.palmTop - HAND.palm[1];
+    return capsuleHand(unit, (limb) => {
+        const onLoop = (degrees) => {
+            const a = (degrees * Math.PI) / 180;
+            return [R.center[0] + R.r * Math.cos(a), R.center[1] + R.r * Math.sin(a)];
+        };
+        const chain = (from, angles, r) => {
+            const at = [from, ...angles.map(onLoop)].map(([out, y]) => [inner * out, y, 0]);
+            for (let k = 1; k < at.length; k++) limb(at[k - 1], at[k], r);
+        };
+        chain(R.knuckle, R.indexAt, R.indexR);
+        chain(R.base, R.thumbAt, R.thumbR);
+        R.across.forEach((across, k) => {
+            const length = HAND.finger.lengths[k + 1] * R.long;
+            const spread = -inner * R.fan * (k + 0.5);
+            const top = [inner * across, palmBottom + HAND.finger.radius, 0];
+            limb(top, [top[0] + length * Math.sin(spread), top[1] - length * Math.cos(R.curl), -length * Math.sin(R.curl)], HAND.finger.radius);
+        });
+    });
+}
+
+/**
+ * A HAND ABOUT TO PRESS (Meme Studio's Two Buttons, Steve's QA 2026-11-03: the
+ * fist's block with its long thin index read as a popsicle at this size): the
+ * index straight and thick, `reach` long, the other three curled back in two
+ * joints, the thumb laid along the palm's edge.
+ */
+export const PRESS = Object.freeze({
+    reach: 1.75, indexR: 0.2,
+    curled: Object.freeze({ first: 0.62, second: 0.5, r: 0.19 }),
+    thumb: Object.freeze({ r: 0.22, from: Object.freeze([0.55, 0.45, -0.1]), to: Object.freeze([0.78, -0.45, -0.3]) })
+});
+
+export function pressGeometry(unit, inner) {
+    const P = PRESS;
+    const palmBottom = HAND.palmTop - HAND.palm[1];
+    return capsuleHand(unit, (limb) => {
+        limb([inner * 0.48, palmBottom + 0.1, 0], [inner * 0.48, palmBottom - P.reach, 0], P.indexR);
+        for (const across of [0.16, -0.16, -0.48]) {
+            const x = inner * across;
+            const knuckle = [x, palmBottom + 0.05, 0];
+            const bend = [x, palmBottom - P.curled.first * 0.75, -P.curled.first * 0.55];
+            const tip = [x, palmBottom - P.curled.first * 0.2, -P.curled.first * 0.55 - P.curled.second];
+            limb(knuckle, bend, P.curled.r);
+            limb(bend, tip, P.curled.r);
+        }
+        const [a, b] = [P.thumb.from, P.thumb.to];
+        limb([inner * a[0], a[1], a[2]], [inner * b[0], b[1], b[2]], P.thumb.r);
+    });
+}
+
 /** The pointing hand's geometry: the fist with the index out. */
 export function pointingHandGeometry(unit, inner) {
     return fistGeometry(unit, inner, { index: true });
@@ -339,6 +456,12 @@ export function pointWith(figure, side) {
  *  null when there is none. */
 export function fistWith(figure, side) {
     return swapHand(figure, side, 'fist', (unit, inner) => fistGeometry(unit, inner));
+}
+
+/** The hand on `side` of `figure` made the finger-and-thumb ring. Returns the
+ *  hand mesh, or null when there is none. */
+export function ringWith(figure, side) {
+    return swapHand(figure, side, 'ring', (unit, inner) => ringGeometry(unit * RING.scale, inner));
 }
 
 /** The hand on `side` of `figure` the rig's own open hand, drawn at the

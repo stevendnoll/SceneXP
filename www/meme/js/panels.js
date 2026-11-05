@@ -19,9 +19,9 @@
  */
 
 import { createAvatar } from '../../shared/js/avatar-figure-1.0.0.min.js';
-import { expressionOverrides, applyExpression } from '../../shared/js/avatar-expressions-1.0.0.min.js';
-import { armsFor, headTurnFor, legsFor, nodFor, POINTING, FISTED, ENLARGED, STRIDE } from './poses.min.js';
-import { pointWith, fistWith, openWith } from '../../shared/js/hands-1.0.0.min.js';
+import { expressionOverrides, applyExpression, rollEyes, leanHead } from '../../shared/js/avatar-expressions-1.0.0.min.js';
+import { armsFor, headTurnFor, legsFor, nodFor, POINTING, FISTED, ENLARGED, RINGED, TWO_ARMED, SIDES, STRIDE } from './poses.min.js';
+import { pointWith, fistWith, openWith, ringWith } from '../../shared/js/hands-1.0.0.min.js';
 import { SCENES } from './scenes/index.min.js';
 import { paintTexture, haloTexture, tintOf } from './backdrops.min.js';
 
@@ -193,8 +193,9 @@ export function cellCamera(cell, box) {
  * posed on the spec's `side` (a pointing hand for a pointing pose, a fist
  * for one that holds, the hand's `twist` the spec's when given), its
  * legs in a `stride`, its head turned the spec's `look` (toward the
- * leading arm when unsaid) and nodded its `nod`, standing `at` and turned
- * `turn` in the box, and
+ * leading arm when unsaid), nodded its `nod` and leaned over its `tilt`, its eyes rolled `gaze` with
+ * the whites `eyes` times their size, standing `at` and turned `turn` in the
+ * box, and
  * glowing when `glow` is above zero (the halo behind the head, the light
  * ahead of it). Returns the shared figure with `undoExpression`,
  * `glow` (the halo group, or null), `glowLight` and `spec` added.
@@ -203,6 +204,8 @@ export function makeFigure(avatar, spec) {
     const figure = createAvatar(avatar, { overrides: { ...expressionOverrides(spec.expression), ...(spec.overrides || {}) } });
     figure.spec = spec;
     figure.undoExpression = applyExpression(figure, spec.expression);
+    // The eyes after the expression, whose whites they are measured on.
+    if (spec.gaze !== undefined || spec.eyes !== undefined) rollEyes(figure, spec.gaze || 0, { grow: spec.eyes || 1 });
     // The template's side and look, never the avatar's handedness (poses.js).
     const side = spec.side || 'right';
     const arms = armsFor(spec.pose, side, spec.twist);
@@ -221,13 +224,17 @@ export function makeFigure(avatar, spec) {
         }
     }
     figure.setPose(arms);
-    if (POINTING.includes(spec.pose)) pointWith(figure, side);
-    else if (FISTED.includes(spec.pose)) fistWith(figure, side);
-    else if (ENLARGED.includes(spec.pose)) openWith(figure, side);
+    for (const s of TWO_ARMED.includes(spec.pose) ? SIDES : [side]) {
+        if (POINTING.includes(spec.pose)) pointWith(figure, s);
+        else if (RINGED.includes(spec.pose)) ringWith(figure, s);
+        else if (FISTED.includes(spec.pose)) fistWith(figure, s);
+        else if (ENLARGED.includes(spec.pose)) openWith(figure, s);
+    }
     const head = figure.person.getObjectByName('head');
     if (head) {
         head.rotation.y = headTurnFor(spec.pose, spec.look === undefined ? side : spec.look);
         if (spec.nod) head.rotation.x = nodFor(spec.nod);
+        if (spec.tilt) leanHead(figure, spec.tilt);
     }
     figure.glow = buildGlow(spec.glow);
     if (figure.glow) {
@@ -342,7 +349,7 @@ export function buildPanel(cell, config, avatarFor, { mobile = false, tint = nul
         box.add(figure.group);
         return figure;
     });
-    const props = cell.scene && SCENES[cell.scene] ? SCENES[cell.scene](box, config, { figures, mobile, cell }) : null;
+    const props = cell.scene && SCENES[cell.scene] ? SCENES[cell.scene](box, config, { figures, mobile, cell, avatarFor }) : null;
     return {
         group: box,
         box,
@@ -368,6 +375,13 @@ export function buildPanel(cell, config, avatarFor, { mobile = false, tint = nul
             // A prop fitted to the figure (a helmet) is fitted again.
             if (props && props.userData && typeof props.userData.fit === 'function') props.userData.fit(figure);
             return figure;
+        },
+        /** The role's `avatar` changed: a prop that wears it follows (Two
+         *  Buttons' hand, which is no figure). True when one did. */
+        redress(roleId, avatar) {
+            if (!props || !props.userData || typeof props.userData.redress !== 'function') return false;
+            props.userData.redress(roleId, avatar);
+            return true;
         },
         /** The back wall in the visitor's `tint` (null for the template's
          *  own). True when the wall follows one. */

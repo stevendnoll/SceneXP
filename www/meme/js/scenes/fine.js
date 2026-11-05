@@ -40,7 +40,7 @@ function rng(seed) {
 
 /** A soft glow for a flame, drawn on a canvas when there is one (none
  *  under test), else the sprite's plain color. */
-function flameMaterial(color) {
+export function flameMaterial(color) {
     const base = { color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending };
     if (typeof document === 'undefined') return new THREE.SpriteMaterial({ ...base, opacity: 0.8 });
     const c = document.createElement('canvas');

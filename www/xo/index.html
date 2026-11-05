@@ -127,7 +127,7 @@
     <title>X's and O's | SceneXP</title>
 
     <link rel="preload" href="../shared/css/styles-1.0.0.min.css?v=7" as="style">
-    <link rel="preload" href="css/experience.min.css?v=29" as="style">
+    <link rel="preload" href="css/experience.min.css?v=30" as="style">
     <link rel="modulepreload" href="../lib/three/r186/three.min.js">
     <!-- BEGIN generated modulepreload (npm run build): every module this page imports, fetched at once -->
     <link rel="modulepreload" href="js/main.min.js">
@@ -204,7 +204,7 @@
     <link rel="icon" type="image/x-icon" href="favicon.ico" sizes="16x16 32x32 48x48 64x64">
 
     <link rel="stylesheet" href="../shared/css/styles-1.0.0.min.css?v=7">
-    <link rel="stylesheet" href="css/experience.min.css?v=29">
+    <link rel="stylesheet" href="css/experience.min.css?v=30">
     <!-- The welcome card's avatar portrait (shared with the home page). -->
     <link rel="stylesheet" href="../shared/css/avatar-1.0.0.min.css">
 
@@ -302,12 +302,17 @@
          this scene has no click-to-start surface: every action is a button,
          and adding a full-screen click target would be the one exception.
 
+         A FEW SENTENCES, THEN THE BUTTON. The full rules read as a wall of text
+         on arrival, so they are folded under "How to play" with the browser's
+         own disclosure, and the buttons below stay in view.
+
          IT COMES BACK. "How to play" in the playbook reopens this same card
-         with a single "Back to the playbook" button (hud.js `showHelp`), so the
-         rules and the directory link below are never more than a press away. -->
+         with a single "Back to the playbook" button and the rules already
+         unfolded (hud.js `showHelp`), so the rules and the directory link below
+         are never more than a press away. -->
     <div id="welcome" class="card-overlay" hidden>
         <div class="card-panel welcome-panel" role="dialog" aria-modal="true"
-            aria-labelledby="welcome-title" aria-describedby="welcome-intro">
+            aria-labelledby="welcome-title" aria-describedby="welcome-intro welcome-basics">
             <!-- The 2D game's logo beside the name, so a visitor who knows
                  exesnohs.com recognizes the game before reading a word. alt=""
                  because the heading already says X's and O's, and this
@@ -330,79 +335,26 @@
                 There is no defense on the field, so you can learn the routes and try out your own plays.
                 Practice scores never touch your best score or a game you have saved.</p>
 
-            <ol class="welcome-steps">
-                <li><strong>Call a play.</strong> Pick one from the playbook<span class="real-game-only">, and
-                    choose a defense to face or leave it to chance</span>.</li>
-                <li><strong>Snap the ball.</strong> Take as long as you like reading
-                    the formation first.</li>
-                <!-- THE CLOCK IS SPELLED OUT HERE BECAUSE THE READOUT IS
-                     `aria-hidden`. A ticking number inside a live region would
-                     talk over everything else once a frame, so the rule is
-                     stated once, up front, where it costs nobody anything. The
-                     word "ten" is checked against `clock.decide` by the suite,
-                     so the sentence cannot quietly go stale if the number
-                     changes. -->
-                <li><strong>Throw or run.</strong> Hit a receiver, or keep it
-                    yourself and see how far you get. You have ten seconds from
-                    the snap to make up your mind, and holding on past that is
-                    <span class="real-game-only">a sack</span><span class="practice-only">five points off</span>.</li>
-                <!-- THE JUMP IS THE VISITOR'S SINCE 2026-09-23. It used to
-                     happen by itself, so the rules had nothing to say about
-                     it. Now a mistimed press loses the pass, which is a rule a
-                     visitor is owed before it costs them anything, and so is
-                     the way to switch it off. The ring is from 2026-10-30: the
-                     quarterback leads his receiver, so the ball is thrown to a
-                     spot ahead of him rather than at him, and the ring is what
-                     says so. -->
-                <li><strong>Jump for it.</strong> While the ball is in the air,
-                    a ring on the grass marks where it will come down. Press Jump
-                    or tap your receiver to send him up for it. The button
-                    lights up as the ball arrives. Jump too early or too late
-                    and the pass can sail past him<span class="real-game-only"> or be picked off</span>. If you
-                    would rather just watch, turn on Auto jump in the
-                    playbook.</li>
-                <!-- SHARE THE PLAY (specs/xo-photos-plan, 2026-10-30). The clip
-                     and the picture are made on the device and go only where
-                     the visitor sends them, so the rule can promise that. -->
-                <li><strong>Share the play.</strong> After the whistle, watch the
-                    replay from any of five views, one of them over the
-                    quarterback's shoulder, then share a short clip of it,
-                    made right on your device, or save a picture of its best
-                    moment.</li>
-                <!-- DESIGN A PLAY (specs/custom-plays-PRD, 2026-11-02). The
-                     first tile in the playbook opens a screen to draw routes
-                     on a formation. The rule worth stating up front is the one
-                     the designer repeats: where a line ends is where the
-                     player stops. -->
-                <li><strong>Design a play.</strong> The first tile in the
-                    playbook opens a field to draw on. Pick a formation, choose
-                    a receiver or the quarterback, and draw their route from
-                    where they stand. Where the line ends is where they stop.
-                    Saved plays stay in your book, on this device.</li>
-            </ol>
+            <!-- THE TWO RULES THAT STAY OUT OF THE FOLD, because they can cost
+                 points before anything has explained them. The plays are named,
+                 the throw buttons wear their letters, the points are painted on
+                 the grass, and the result card explains every whistle, so the
+                 rest can wait until somebody asks.
 
-            <!-- ONE LINE, AND ONLY BECAUSE THE LETTERS ARE ALREADY THERE. The
-                 receivers wear A to D on the grass, on the playbook diagram and
-                 on the buttons, so the keys are the letters a visitor has been
-                 reading all along rather than a scheme to learn. Q is the
-                 quarterback's own letter, painted in front of him. -->
-            <p class="welcome-keys card-meta">On a keyboard: <kbd>Space</kbd>,
-                <kbd>S</kbd> or <kbd>Q</kbd> snaps the ball, <kbd>C</kbd> changes
-                the play before you do, <kbd>A</kbd> to <kbd>D</kbd> throw to
-                that receiver, and <kbd>K</kbd> keeps it. With the ball in the
-                air, <kbd>J</kbd> or <kbd>Space</kbd> jumps. During a replay,
-                <kbd>V</kbd> or the arrow keys switch the view, and <kbd>V</kbd>
-                switches it again when you share the play.</p>
+                 THE CLOCK BECAUSE THE READOUT IS `aria-hidden`. A ticking number
+                 inside a live region would talk over everything else once a
+                 frame, so this sentence is the only way a visitor who cannot
+                 see the clock learns the rule. That is also why this paragraph
+                 is part of the dialog's description: it is read out on arrival,
+                 folded rules or not. The word "ten" is checked against
+                 `clock.decide` by the suite, so the sentence cannot quietly go
+                 stale if the number changes.
 
-            <p class="welcome-ladder-title">What a play is worth</p>
-            <ul class="welcome-ladder">
-                <li><span class="ladder-pts is-good">5</span> past the first line</li>
-                <li><span class="ladder-pts is-good">15</span> past the second</li>
-                <li><span class="ladder-pts is-good">30</span> past the third</li>
-                <li><span class="ladder-pts is-good">50</span> all the way across</li>
-                <li><span class="ladder-pts is-bad">-5</span> <span class="real-game-only">sacked holding the ball</span><span class="practice-only">out of time holding the ball</span></li>
-                <li class="real-game-only"><span class="ladder-pts is-bad">-10</span> intercepted</li>
-            </ul>
+                 THE JUMP BECAUSE A MISSED PRESS LOSES THE PASS, and the button
+                 lights up for only a moment during somebody's first throw. -->
+            <p id="welcome-basics" class="card-detail welcome-basics">Call a play and snap the ball, then
+                you have ten seconds to throw or run. When a pass is in the air,
+                press Jump as the button lights up.</p>
 
             <!-- THE 2D GAME GIVES YOU A NUMBER TO BEAT, and it is worth having.
                  "500 is a perfect score" turns ten separate plays into one
@@ -411,6 +363,87 @@
                  fifty a crossing is worth. -->
             <p class="welcome-target">Fifty a play is the most you can get, so
                 <strong>500 is a perfect game</strong>. Good luck.</p>
+
+            <!-- ABOVE THE BUTTONS, so a visitor who opens it finishes reading
+                 right at "Take the field" instead of scrolling back up on a
+                 phone. CLOSED IN THE MARKUP and set again by hud.js each time
+                 the card is shown: `showWelcome` closes it and `showHelp` opens
+                 it, because pressing How to play in the playbook should not
+                 mean pressing How to play a second time here. The shared focus
+                 trap and the key handler in hud.js both already know a summary,
+                 so Space on it unfolds the rules rather than snapping the ball. -->
+            <details id="welcome-howto" class="welcome-howto">
+                <summary id="welcome-howto-toggle">How to play</summary>
+
+                <ol class="welcome-steps">
+                    <li><strong>Call a play.</strong> Pick one from the playbook<span class="real-game-only">, and
+                        choose a defense to face or leave it to chance</span>.</li>
+                    <li><strong>Snap the ball.</strong> Take as long as you like reading
+                        the formation first.</li>
+                    <!-- THE CLOCK AGAIN, with what it costs. See the note on the
+                         paragraph above. The suite checks this "ten" as well. -->
+                    <li><strong>Throw or run.</strong> Hit a receiver, or keep it
+                        yourself and see how far you get. You have ten seconds from
+                        the snap to make up your mind, and holding on past that is
+                        <span class="real-game-only">a sack</span><span class="practice-only">five points off</span>.</li>
+                    <!-- THE JUMP IS THE VISITOR'S SINCE 2026-09-23. It used to
+                         happen by itself, so the rules had nothing to say about
+                         it. Now a mistimed press loses the pass, which is a rule a
+                         visitor is owed before it costs them anything, and so is
+                         the way to switch it off. The ring is from 2026-10-30: the
+                         quarterback leads his receiver, so the ball is thrown to a
+                         spot ahead of him rather than at him, and the ring is what
+                         says so. -->
+                    <li><strong>Jump for it.</strong> While the ball is in the air,
+                        a ring on the grass marks where it will come down. Press Jump
+                        or tap your receiver to send him up for it. The button
+                        lights up as the ball arrives. Jump too early or too late
+                        and the pass can sail past him<span class="real-game-only"> or be picked off</span>. If you
+                        would rather just watch, turn on Auto jump in the
+                        playbook.</li>
+                    <!-- SHARE THE PLAY (specs/xo-photos-plan, 2026-10-30). The clip
+                         and the picture are made on the device and go only where
+                         the visitor sends them, so the rule can promise that. -->
+                    <li><strong>Share the play.</strong> After the whistle, watch the
+                        replay from any of five views, one of them over the
+                        quarterback's shoulder, then share a short clip of it,
+                        made right on your device, or save a picture of its best
+                        moment.</li>
+                    <!-- DESIGN A PLAY (specs/custom-plays-PRD, 2026-11-02). The
+                         first tile in the playbook opens a screen to draw routes
+                         on a formation. The rule worth stating up front is the one
+                         the designer repeats: where a line ends is where the
+                         player stops. -->
+                    <li><strong>Design a play.</strong> The first tile in the
+                        playbook opens a field to draw on. Pick a formation, choose
+                        a receiver or the quarterback, and draw their route from
+                        where they stand. Where the line ends is where they stop.
+                        Saved plays stay in your book, on this device.</li>
+                </ol>
+
+                <!-- ONE LINE, AND ONLY BECAUSE THE LETTERS ARE ALREADY THERE. The
+                     receivers wear A to D on the grass, on the playbook diagram and
+                     on the buttons, so the keys are the letters a visitor has been
+                     reading all along rather than a scheme to learn. Q is the
+                     quarterback's own letter, painted in front of him. -->
+                <p class="welcome-keys card-meta">On a keyboard: <kbd>Space</kbd>,
+                    <kbd>S</kbd> or <kbd>Q</kbd> snaps the ball, <kbd>C</kbd> changes
+                    the play before you do, <kbd>A</kbd> to <kbd>D</kbd> throw to
+                    that receiver, and <kbd>K</kbd> keeps it. With the ball in the
+                    air, <kbd>J</kbd> or <kbd>Space</kbd> jumps. During a replay,
+                    <kbd>V</kbd> or the arrow keys switch the view, and <kbd>V</kbd>
+                    switches it again when you share the play.</p>
+
+                <p class="welcome-ladder-title">What a play is worth</p>
+                <ul class="welcome-ladder">
+                    <li><span class="ladder-pts is-good">5</span> past the first line</li>
+                    <li><span class="ladder-pts is-good">15</span> past the second</li>
+                    <li><span class="ladder-pts is-good">30</span> past the third</li>
+                    <li><span class="ladder-pts is-good">50</span> all the way across</li>
+                    <li><span class="ladder-pts is-bad">-5</span> <span class="real-game-only">sacked holding the ball</span><span class="practice-only">out of time holding the ball</span></li>
+                    <li class="real-game-only"><span class="ladder-pts is-bad">-10</span> intercepted</li>
+                </ul>
+            </details>
 
             <!-- Shown only when there is a game to come back to. A visitor
                  returning to a tab they left open is told where they are before

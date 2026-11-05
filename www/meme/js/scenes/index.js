@@ -13,7 +13,10 @@ import { build as plan } from './plan.min.js';
 import { build as space } from './space.min.js';
 import { build as fine } from './fine.min.js';
 import { build as handshake } from './handshake.min.js';
+import { build as buttons, sweat } from './buttons.min.js';
+import { build as hall } from './hall.min.js';
+import { build as medal } from './medal.min.js';
 
-export const SCENES = Object.freeze({ plan, space, fine, handshake });
+export const SCENES = Object.freeze({ plan, space, fine, handshake, buttons, sweat, hall, medal });
 
 export const SCENE_IDS = Object.freeze(Object.keys(SCENES));

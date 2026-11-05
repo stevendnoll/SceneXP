@@ -193,7 +193,7 @@ export function avatarForRole(roleId) {
 
 /** The role labels of a cell's figures, for the fields. */
 function roleNamesFor(cellIndex) {
-    return state.template.cells[cellIndex].figures.map((f) => (state.template.roles.find((r) => r.id === f.role) || {}).label || f.role);
+    return state.template.cells[cellIndex].figures.map((f) => f.name || (state.template.roles.find((r) => r.id === f.role) || {}).label || f.role);
 }
 
 /** The avatar the lead wears right now, for the link. */

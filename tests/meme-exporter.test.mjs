@@ -458,6 +458,16 @@ describe('the three-person templates', () => {
         phone.dispose();
     });
 
+    test('recast reaches a prop that wears the role, as well as its figures: Two Buttons\' hand', () => {
+        const stage = S.createStage(CONFIG, { canvas: stageCanvas(), makeRenderer: fakeRenderer });
+        stage.setTemplate(T.templateOf('twoButtons'), () => DEFAULT_AVATAR);
+        // The one figure below and the hand above.
+        expect(stage.recast('you')).toBe(2);
+        expect(stage.panels[0].props.userData.redress).toEqual(expect.any(Function));
+        expect(stage.panels[1].figures).toHaveLength(1);
+        stage.dispose();
+    });
+
     test('recast builds every figure of a role again with the role\'s avatar, and nothing for a role not there', () => {
         const avatars = { you: DEFAULT_AVATAR, friend: { ...DEFAULT_AVATAR, skin: 'deep' } };
         const stage = S.createStage(CONFIG, { canvas: stageCanvas(), makeRenderer: fakeRenderer });

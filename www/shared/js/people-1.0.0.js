@@ -334,6 +334,8 @@ export function createPerson(config) {
         apronColor = 0x1a1a2e,
         hairStyle = 'short',   // 'short' | 'long' (shoulder-length) | 'buzz' (close-cropped)
         hasSkirt = false,      // render an A-line skirt in place of the belt
+        hasBelt = true,        // false for a waist with no belt or buckle
+        beltColor = 0x2c1810,  // the belt's color (the buckle stays silver)
         bald = false,          // skip all hair for a clean bald head
         muscular = false,      // broader torso + shoulders and thicker arms and legs
         handScale = 1,         // relative hand size (1 = standard)
@@ -579,6 +581,7 @@ export function createPerson(config) {
         skinMaterial
     );
     neck.position.y = legLength + torsoHeight + neckHeight / 2;
+    neck.userData.isNeck = true;
     person.add(neck);
 
     // === TORSO ===
@@ -901,10 +904,10 @@ export function createPerson(config) {
     });
 
     // === BELT (skipped when wearing a skirt) ===
-    if (!hasSkirt) {
+    if (!hasSkirt && hasBelt) {
         const belt = new THREE.Mesh(
             new THREE.BoxGeometry(torsoWidth * seat + 0.02, 0.04, torsoDepth + 0.02),
-            new THREE.MeshStandardMaterial({ color: 0x2c1810, roughness: 0.5, metalness: 0.2 })
+            new THREE.MeshStandardMaterial({ color: beltColor, roughness: 0.5, metalness: 0.2 })
         );
         belt.position.y = legLength + 0.02;
         person.add(belt);

@@ -3337,6 +3337,11 @@ describe('the play clock', () => {
         const spoken = words[n] || `${n}`;
         const steps = html.slice(html.indexOf('welcome-steps'), html.indexOf('</ol>'));
         expect(steps.toLowerCase()).toContain(`${spoken} seconds`);
+        // And outside the fold, in the words read out with the dialog, because
+        // the readout is the one thing a visitor without sight of it cannot use.
+        const start = html.indexOf('id="welcome-basics"');
+        const basics = html.slice(start, html.indexOf('</p>', start));
+        expect(basics.toLowerCase()).toContain(`${spoken} seconds`);
     });
 
     /** The readout is deliberately not announced. If that ever changes, the

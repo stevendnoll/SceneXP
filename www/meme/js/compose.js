@@ -236,13 +236,16 @@ export function composeMeme(ctx, { template, captions = [], w, h, config, imageF
  * the same pixels as the rects), when there is one. A caption on a prop's
  * surface (`{ prop: 'board' }`) is drawn across the top of `props[i][name]`
  * (a rect in the same pixels), when there is one, so it sits on the board
- * in the picture, up where the presenting hand is not (Steve, 2026-10-28).
+ * in the picture, up where the presenting hand is not (Steve, 2026-10-28), or
+ * at the slot's own `align` (Two Buttons' plates hold their words centered).
  * The live overlay draws through here too, so the stage and the picture
  * agree.
  */
 export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], label = null, props = [] } = {}) {
     let k = 0;
     const onBoard = C.board ? { ...C, size: C.size * C.board.scale, maxLines: C.board.maxLines } : C;
+    const onTile = { ...C, ...C.tile };
+    const onPlate = { ...C, ...C.plate };
     template.cells.forEach((cell, i) => {
         // The labels drawn on this panel so far, so the next keeps clear.
         const placed = [];
@@ -251,7 +254,7 @@ export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], 
             if (!rects[i]) continue;
             if (slot && typeof slot === 'object' && slot.prop) {
                 const surface = props[i] ? props[i][slot.prop] : null;
-                if (surface) drawCaption(ctx, text, surface, 'top', onBoard);
+                if (surface) drawCaption(ctx, text, surface, slot.align || 'top', slot.align === 'center' ? onPlate : onBoard);
             } else if (slot && typeof slot === 'object') {
                 const point = anchors[i] ? anchors[i][slot.label] : null;
                 if (label) {
@@ -259,7 +262,7 @@ export function drawCaptions(ctx, template, captions, rects, C, { anchors = [], 
                     if (drawn) placed.push(drawn.box);
                 }
             } else {
-                drawCaption(ctx, text, rects[i], slot, C);
+                drawCaption(ctx, text, rects[i], slot, slot === 'center' ? onTile : C);
             }
         }
     });

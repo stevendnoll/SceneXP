@@ -908,6 +908,8 @@ describe('the markup and the stylesheet agree', () => {
         expect(css).toContain('.throw-dot');
         expect(css).toContain('.hud-mute-icon');
         expect(css).toContain('.welcome-target');
+        expect(css).toContain('.welcome-basics');
+        expect(css).toContain('.welcome-howto');
     });
 
     /**
@@ -1073,6 +1075,9 @@ describe('changing the play before the snap', () => {
 
     test('How to play reopens the welcome card in place of the book, and comes back', async () => {
         await boot();
+        // Somebody arriving gets the short version, with the button focused.
+        expect(dom.el('welcome-howto').open).toBe(false);
+        expect(dom.el('welcome-actions').children[0].focused).toBe(true);
         dom.el('welcome-actions').children[0].click();   // Take the field
         await flushAsync();
         const head = dom.el('playbook').querySelector('.playbook-head');
@@ -1088,12 +1093,38 @@ describe('changing the play before the snap', () => {
         expect(dom.el('welcome').hidden).toBe(false);
         expect(welcomeLabels()).toEqual(['Back to the playbook']);
         expect(dom.el('welcome-resume').hidden).toBe(true);
-        expect(dom.el('welcome-actions').children[0].focused).toBe(true);
+        // ONE PRESS OF HOW TO PLAY IS ENOUGH: the rules are already unfolded, and
+        // focus is on their label, because the card opens at the top and the
+        // button below the rules can be out of sight on a short screen.
+        expect(dom.el('welcome-howto').open).toBe(true);
+        expect(dom.el('welcome-howto-toggle').focused).toBe(true);
 
         dom.el('welcome-actions').children[0].click();
         expect(dom.el('welcome').hidden).toBe(true);
         expect(dom.el('playbook').hidden).toBe(false);
         expect(help.focused).toBe(true);
+    });
+
+    /**
+     * THE FOLD IS SET BY WHO ASKED, NOT LEFT AS IT WAS. Somebody can unfold the
+     * rules from the playbook and then come back to the welcome card by playing
+     * the opening again, and that card is an arrival. Through the build main.js
+     * imports, and in both of the ways the card is offered.
+     */
+    test('the arrival cards fold the rules even after How to play left them open', async () => {
+        await boot();
+        const hud = await import('../www/xo/js/hud.min.js');
+        const howTo = dom.el('welcome-howto');
+
+        hud.showHelp(() => {});
+        expect(howTo.open).toBe(true);
+        hud.showWelcome(() => {});
+        expect(howTo.open).toBe(false);
+
+        hud.showHelp(() => {});
+        expect(howTo.open).toBe(true);
+        hud.showPracticeWelcome(() => {}, () => {});
+        expect(howTo.open).toBe(false);
     });
 
     /**

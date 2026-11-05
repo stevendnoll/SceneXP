@@ -260,6 +260,16 @@ export function dressExtraShoes(person, kind, color, skin) {
  *   vneck       the collar cut away to a V of skin (`v` wide and deep),
  *               a band of the shirt's darker shade along each edge; short
  *               sleeves
+ *   suit        the jacket in the shirt's color: a V of white shirt on the
+ *               chest (`v` half wide at its top and deep, `drop` under the
+ *               torso's top, where its front has stopped rounding away), a
+ *               pointed collar, a tie in its own color (a `knot` and a `blade`,
+ *               `w` wide), a lapel down each side of the V, `lapel` wide and
+ *               falling `lapelFall` to its outer corner, in the jacket's darker
+ *               shade, the jacket's opening and two buttons
+ *               below the V, and a white cuff at each wrist. Everything is
+ *               measured from the torso (Steve's QA, 2026-11-03: a flat
+ *               cutout set by hand stood above the chest and stuck out from it)
  */
 export const SHIRT_SIZE = Object.freeze({
     sweater: { band: 0.035, cuff: 0.03, proud: 0.006, shade: 0.88, neck: 0.012 },
@@ -267,7 +277,12 @@ export const SHIRT_SIZE = Object.freeze({
     jersey: { trim: 0.012, band: 0.03, stripe: 0.016, light: 0xf2f0ea, dark: 0x1f2024 },
     buttonDown: { collar: [0.055, 0.03, 0.006], shade: 0.9 },
     hoodie: { pocket: [0.2, 0.09, 0.012], string: 0.12, cuff: 0.03, proud: 0.006, shade: 0.9 },
-    vneck: { v: [0.1, 0.075], band: 0.009, shade: 0.85 }
+    vneck: { v: [0.1, 0.075], band: 0.009, shade: 0.85 },
+    suit: {
+        v: [0.066, 0.25], drop: 0.012, lapel: 0.05, lapelFall: 0.03, shade: 0.72, white: 0xf4f2ec,
+        collar: [0.036, 0.034, 0.005], knot: [0.036, 0.028], blade: 0.03, w: 0.046,
+        button: 0.0085, opening: 0.004, cuff: 0.016, proud: 0.004
+    }
 });
 
 /**
@@ -297,7 +312,7 @@ export const HOOD = Object.freeze({
 
 /** The styles here whose sleeves are long (the rig covers the forearms in
  *  the shirt). */
-export const LONG_SLEEVED = Object.freeze(['sweater', 'turtleneck', 'buttonDown', 'hoodie']);
+export const LONG_SLEEVED = Object.freeze(['sweater', 'turtleneck', 'buttonDown', 'hoodie', 'suit']);
 
 /**
  * The jersey's number (Steve's QA, 2026-10-26): block numerals from a
@@ -683,8 +698,8 @@ function cuff(arm, thick, proud, mat) {
 }
 
 /** Dress the torso as `style` (SHIRT_SIZE); `skin` is the figure's skin
- *  material, for a V-neck's opening. */
-export function dressShirt(person, style, color, skin = null) {
+ *  material, for a V-neck's opening; `tie` the suit's tie color. */
+export function dressShirt(person, style, color, skin = null, { tie = 0x8a1f2c } = {}) {
     const spec = SHIRT_SIZE[style];
     const { torso, collar, arms } = bodyParts(person);
     if (!torso) return;
@@ -797,6 +812,45 @@ export function dressShirt(person, style, color, skin = null) {
             const tip = add(new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.012, 6), stringMat), 'drawstring');
             tip.position.set(s * 0.03, top - spec.string - 0.012, front + 0.006);
         }
+    } else if (style === 'suit') {
+        if (collar) collar.visible = false;
+        const white = material(spec.white, 0.75);
+        const flat = (points, z, mat, name) => {
+            const shape = new THREE.Shape();
+            points.forEach(([x, y], i) => (i ? shape.lineTo(x, y) : shape.moveTo(x, y)));
+            shape.closePath();
+            const mesh = add(new THREE.Mesh(new THREE.ShapeGeometry(shape), mat), name);
+            mesh.position.z = z;
+            return mesh;
+        };
+        const [half, deep] = spec.v;
+        const start = top - spec.drop;
+        const point = start - deep;
+        flat([[-half, start], [half, start], [0, point]], front + 0.002, white, 'shirtFront');
+        for (const s of [-1, 1]) {
+            // Its outer corner lower than its inner, as the chest rounds away
+            // toward the shoulder.
+            flat([[s * half, start], [s * (half + spec.lapel), start - spec.lapelFall], [s * spec.lapel * 0.35, point - 0.01], [0, point]], front + 0.004, darker, 'lapel');
+            const [cw, ch, cd] = spec.collar;
+            const wing = add(new THREE.Mesh(new THREE.BoxGeometry(cw, ch, cd), white), 'collar');
+            wing.position.set(s * 0.026, top - ch / 2 + 0.006, front + 0.007);
+            wing.rotation.z = -s * 0.6;
+        }
+        const tieMat = material(tie, 0.55);
+        const [kw, kh] = spec.knot;
+        const knotTop = start - 0.004;
+        flat([[-kw / 2, knotTop], [kw / 2, knotTop], [kw * 0.34, knotTop - kh], [-kw * 0.34, knotTop - kh]], front + 0.006, tieMat, 'tie');
+        const bladeTop = knotTop - kh + 0.002;
+        const bladeEnd = point + 0.03;
+        flat([[-spec.w * 0.3, bladeTop], [spec.w * 0.3, bladeTop], [spec.w / 2, bladeEnd + spec.blade], [0, bladeEnd], [-spec.w / 2, bladeEnd + spec.blade]], front + 0.005, tieMat, 'tie');
+        // The jacket closing below the V: its opening, and two buttons.
+        const opening = add(new THREE.Mesh(new THREE.BoxGeometry(spec.opening, point - bottom - 0.05, 0.002), darker), 'opening');
+        opening.position.set(0, (point + bottom + 0.05) / 2, front + 0.002);
+        for (const k of [1, 2.4]) {
+            const button = add(new THREE.Mesh(new THREE.SphereGeometry(spec.button, 8, 6), darker), 'button');
+            button.position.set(0, point - k * 0.04, front + 0.004);
+        }
+        for (const arm of arms) cuff(arm, spec.cuff, spec.proud, white);
     } else if (style === 'vneck') {
         if (collar) collar.visible = false;
         const [vw, vd] = spec.v;
@@ -965,8 +1019,9 @@ export function dressBottom(person, style, color, skin = null) {
             leg.add(stripe);
         }
     }
-    if (style === 'sweatpants' || style === 'leggings') {
-        // A waistband over the belt line, with a drawstring on sweatpants.
+    if (style === 'sweatpants' || style === 'leggings' || style === 'basketballShorts') {
+        // A waistband where another bottom's belt would be, these three having
+        // none (Steve, 2026-11-05), with a drawstring on sweatpants.
         const { torso } = bodyParts(person);
         if (!torso) return;
         const { width, height, depth } = torsoBox(torso);

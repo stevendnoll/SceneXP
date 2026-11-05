@@ -267,10 +267,10 @@ describe('the page', () => {
         expect(dom.el('mm-picture-save').hidden).toBe(false);
         expect(dom.el('mm-picture-save').textContent).toBe('Save picture');
         expect(dom.el('mm-hint').hidden).toBe(false);
-        // The picker: ten templates in order, the first pressed.
+        // The picker: fourteen templates in order, the first pressed.
         const picks = dom.el('mm-picker').children;
-        expect(picks.map((b) => b.dataset.template)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan', 'headTurn', 'handshake', 'alwaysHasBeen', 'everythingIsFine']);
-        expect(picks.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', ...Array(9).fill('false')]);
+        expect(picks.map((b) => b.dataset.template)).toEqual(['surprised', 'panic', 'nopeYep', 'thenNow', 'galaxyBrain', 'plan', 'headTurn', 'handshake', 'alwaysHasBeen', 'everythingIsFine', 'medal', 'sideGlance', 'notThatSimple', 'twoButtons']);
+        expect(picks.map((b) => b.getAttribute('aria-pressed'))).toEqual(['true', ...Array(13).fill('false')]);
         // A glyph of the grid, then the words.
         expect(picks[1].children[0].tagName.toLowerCase()).toBe('svg');
         expect(picks[1].children[0].children).toHaveLength(6);
@@ -298,7 +298,7 @@ describe('the page', () => {
         expect(fields.map((f) => f.children[0].textContent)).toEqual(['Panel 1: Caption', 'Panel 2: Caption', 'Panel 3: Caption']);
         expect(fields[0].children[1].value).toBe('first');
         expect(state.captions).toEqual(['first', '', '']);
-        expect(dom.el('mm-picker').children.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', ...Array(8).fill('false')]);
+        expect(dom.el('mm-picker').children.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', ...Array(12).fill('false')]);
         // The same template again is nothing.
         const panels = state.stage.panels;
         expect(main.pickTemplate('panic').id).toBe('panic');
@@ -486,7 +486,7 @@ describe('the page', () => {
         expect(main.__test__.state.exporter).toBeNull();
         expect(dom.el('meme-app').hidden).toBe(false);
         expect(dom.el('mm-captions').children).toHaveLength(1);
-        expect(dom.el('mm-picker').children).toHaveLength(10);
+        expect(dom.el('mm-picker').children).toHaveLength(14);
         expect(dom.el('mm-picture-save').hidden).toBe(true);
         expect(dom.el('mm-hint').hidden).toBe(true);
         // No stage, no panels on it: the overlay has nothing to draw.
@@ -1063,6 +1063,15 @@ describe('the page', () => {
         main.dress('friend', { ...main.avatarForRole('friend'), shirt: 'teal', skin: 'deep' });
         expect(state.stage.panels[0].figures[1].avatar.skin).toBe('deep');
         expect(state.stage.panels[0].figures[1].avatar.shirt).toBe('white');
+    });
+
+    test('two figures of one role are told apart in the caption fields, by the names The Medal gives them (2026-11-03)', async () => {
+        const main = await boot();
+        main.pickTemplate('medal');
+        const labels = dom.el('mm-captions').children.map((f) => f.children[0].textContent);
+        expect(labels).toEqual(['Label on You, receiving', 'Label on You, giving', 'Bottom caption']);
+        main.pickTemplate('headTurn');
+        expect(dom.el('mm-captions').children.map((f) => f.children[0].textContent)).toEqual(['Label on You', 'Label on A Friend', 'Label on Someone']);
     });
 
     test('a link\'s people arrive as the maker chose them, said so, and stay through Make it mine (M8)', async () => {
